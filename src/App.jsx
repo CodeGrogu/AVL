@@ -37,6 +37,8 @@ const TRAVERSALS = [
 ];
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+const APP_TITLE_FULL = "Modular Binary Tree Lab";
+const APP_TITLE_COMPACT = "MBTL";
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -2012,6 +2014,10 @@ function TreeWorkspace({
 
 export default function App() {
   const persistedRef = useRef(readPersistedState());
+  const headerRowRef = useRef(null);
+  const headerSwitcherRef = useRef(null);
+  const aboutBtnRef = useRef(null);
+  const titleRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState(persistedRef.current.app.activeTab);
   const [treeType, setTreeType] = useState(persistedRef.current.app.treeType);
@@ -2021,6 +2027,7 @@ export default function App() {
   );
   const [sessionsByType, setSessionsByType] = useState(persistedRef.current.sessionsByType);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [useCompactTitle, setUseCompactTitle] = useState(false);
 
   useEffect(() => {
     writePersistedState({
@@ -2064,21 +2071,79 @@ export default function App() {
     ...TREE_TYPE_ORDER.map((key) => ({ key: TREE_CONFIG[key].tab, label: TREE_CONFIG[key].shortLabel })),
   ];
 
+  const recalculateHeaderTitle = useCallback(() => {
+    const row = headerRowRef.current;
+    const switcher = headerSwitcherRef.current;
+    const aboutButton = aboutBtnRef.current;
+    const titleElement = titleRef.current;
+
+    if (!row || !switcher || !aboutButton || !titleElement) return;
+
+    const rowWidth = row.getBoundingClientRect().width;
+    const switcherWidth = Math.max(330, switcher.getBoundingClientRect().width, switcher.scrollWidth);
+    const aboutWidth = aboutButton.getBoundingClientRect().width;
+
+    const style = window.getComputedStyle(titleElement);
+    const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    let fullTitleWidth = titleElement.scrollWidth;
+    if (context) {
+      context.font = font;
+      fullTitleWidth = Math.ceil(context.measureText(APP_TITLE_FULL).width);
+    }
+
+    const spacingAllowance = 60;
+    const requiredWidth = switcherWidth + aboutWidth + fullTitleWidth + spacingAllowance;
+
+    setUseCompactTitle(requiredWidth > rowWidth);
+  }, []);
+
+  useEffect(() => {
+    recalculateHeaderTitle();
+
+    const observer = new ResizeObserver(() => {
+      recalculateHeaderTitle();
+    });
+
+    if (headerRowRef.current) observer.observe(headerRowRef.current);
+    if (headerSwitcherRef.current) observer.observe(headerSwitcherRef.current);
+    if (aboutBtnRef.current) observer.observe(aboutBtnRef.current);
+
+    window.addEventListener("resize", recalculateHeaderTitle);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", recalculateHeaderTitle);
+    };
+  }, [recalculateHeaderTitle]);
+
   return (
     <>
       <a href="#maincontent" className="skip-link">Skip to main content</a>
 
       <main id="maincontent" className="app-shell" tabIndex={-1}>
         <header className="app-header">
-          <div className="app-header-row">
-            <h1>Modular Binary Tree Lab</h1>
+          <div className="app-header-row" ref={headerRowRef}>
+            <div className="app-header-main">
+              <h1 ref={titleRef}>{useCompactTitle ? APP_TITLE_COMPACT : APP_TITLE_FULL}</h1>
+              <div ref={headerSwitcherRef} className="app-header-switcher-wrap">
+                <ConceptSwitcher
+                  tabs={tabs}
+                  activeTab={activeTab}
+                  onSwitchTab={switchTab}
+                  className="app-header-switcher"
+                />
+              </div>
+            </div>
             <button
               type="button"
               className="about-btn"
+              ref={aboutBtnRef}
               onClick={() => setAboutOpen(true)}
               aria-haspopup="dialog"
               aria-expanded={aboutOpen}
-              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
             >
               <Info size={14} /> About
             </button>
@@ -2087,9 +2152,6 @@ export default function App() {
 
         {activeTab === "learn" ? (
           <section id="panel-learn" role="tabpanel" aria-labelledby="switch-learn" className="learn-panel-shell">
-            <div className="learn-switcher-row">
-              <ConceptSwitcher tabs={tabs} activeTab={activeTab} onSwitchTab={switchTab} className="learn-switcher" />
-            </div>
             <LearnPanel />
           </section>
         ) : (
@@ -2107,9 +2169,6 @@ export default function App() {
               history={history}
               session={sessionsByType[treeType]}
               onSessionChange={updateCurrentSession}
-              tabs={tabs}
-              activeTab={activeTab}
-              onSwitchTab={switchTab}
             />
           </section>
         )}
