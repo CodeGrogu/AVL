@@ -27,6 +27,18 @@ export const treeSize = (root) => (!root ? 0 : 1 + treeSize(root.left) + treeSiz
 
 export const treeHeight = (root) => (!root ? 0 : 1 + Math.max(treeHeight(root.left), treeHeight(root.right)));
 
+export const treeLeavesCount = (root) => {
+  if (!root) return 0;
+  if (!root.left && !root.right) return 1;
+  return treeLeavesCount(root.left) + treeLeavesCount(root.right);
+};
+
+export const treeInternalNodesCount = (root) => {
+  if (!root) return 0;
+  if (!root.left && !root.right) return 0;
+  return 1 + treeInternalNodesCount(root.left) + treeInternalNodesCount(root.right);
+};
+
 export const searchPath = (root, value) => {
   const path = [];
   let node = root;

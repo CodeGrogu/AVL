@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Plus, Trash2, Search, Eraser, ArrowDownToLine, ArrowUpToLine, Dices, Trash,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
+  ChevronDown, ChevronRight, ZoomIn, ZoomOut, Maximize,
+  SkipBack, Play, Pause, SkipForward, RotateCcw, Info
+} from "lucide-react";
+import {
   buildTree,
   inOrder,
   layoutTree,
@@ -13,13 +19,15 @@ import {
   treeMax,
   treeMin,
   treeSize,
+  treeLeavesCount,
+  treeInternalNodesCount,
 } from "./trees/baseTree";
 import { TREE_CONFIG, TREE_TYPE_ORDER, TAB_TO_TYPE, TYPE_TO_TAB } from "./trees/treeRegistry";
 
 const INITIAL_VALUES = [50, 30, 70, 20, 40, 60, 80, 10, 35, 55, 75];
 const NODE_RADIUS = 24;
-const STORAGE_KEY = "modular-tree-lab:v1";
-const STORAGE_VERSION = 1;
+const STORAGE_KEY = "modular-tree-lab:v2";
+const STORAGE_VERSION = 2;
 
 const TRAVERSALS = [
   { key: "pre", label: "Pre-order", run: (root) => preOrder(root) },
@@ -27,6 +35,8 @@ const TRAVERSALS = [
   { key: "post", label: "Post-order", run: (root) => postOrder(root) },
   { key: "level", label: "Level-order", run: (root) => levelOrder(root) },
 ];
+
+const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -130,6 +140,7 @@ const readPersistedState = () => {
 
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return createDefaultStorage();
+    if (parsed.version !== STORAGE_VERSION) return createDefaultStorage();
 
     const treeType = TREE_CONFIG[parsed.app?.treeType] ? parsed.app.treeType : "BST";
     const activeTab = parsed.app?.activeTab === "learn" ? "learn" : TYPE_TO_TAB[treeType];
@@ -242,7 +253,7 @@ const buildTimeline = ({ beforeRoot, path = [], traceFrames = [], afterRoot, act
   frames.push({
     root: afterRoot,
     label: `${actionLabel} done${value !== undefined ? ` (${value})` : ""}`,
-    focus: value !== undefined ? [value] : [],
+    focus: [],
     kind: "done",
     explanation: `${actionLabel} complete${valueLabel}.`,
   });
@@ -278,22 +289,102 @@ const interpolateLayout = (fromLayout, toLayout, progress) => {
     nodeMap.set(id, meta);
   }
 
-  const fromEdges = new Set((fromLayout?.edges ?? []).map((edge) => edge.key));
-  const toEdges = new Set((toLayout?.edges ?? []).map((edge) => edge.key));
-  const edgeKeys = new Set([...fromEdges, ...toEdges]);
+  const getUndirected = (u, v) => (u < v ? `${u}-${v}` : `${v}-${u}`);
+  const parseUndirected = (key) => key.split("-").map(Number);
+
+  const fromUndirected = new Map();
+  for (const edge of fromLayout?.edges ?? []) {
+    const [u, v] = edge.key.split("->").map(Number);
+    fromUndirected.set(getUndirected(u, v), edge.key);
+  }
+
+  const toUndirected = new Map();
+  for (const edge of toLayout?.edges ?? []) {
+    const [u, v] = edge.key.split("->").map(Number);
+    toUndirected.set(getUndirected(u, v), edge.key);
+  }
+
+  const common = new Set();
+  const broken = new Set();
+  const formed = new Set();
+
+  for (const un of fromUndirected.keys()) {
+    if (toUndirected.has(un)) common.add(un);
+    else broken.add(un);
+  }
+  for (const un of toUndirected.keys()) {
+    if (!fromUndirected.has(un)) formed.add(un);
+  }
 
   const edges = [];
-  for (const key of edgeKeys) {
-    const [fromValueRaw, toValueRaw] = key.split("->");
-    const fromValue = Number(fromValueRaw);
-    const toValue = Number(toValueRaw);
 
-    const source = nodeMap.get(fromValue);
-    const target = nodeMap.get(toValue);
-    if (!source || !target) continue;
+  for (const un of common) {
+    const key = toUndirected.get(un);
+    const [u, v] = key.split("->").map(Number);
+    const source = nodeMap.get(u);
+    const target = nodeMap.get(v);
+    if (source && target) edges.push({ key, from: source, to: target, opacity: 1 });
+  }
 
-    const opacity = fromEdges.has(key) && toEdges.has(key) ? 1 : fromEdges.has(key) ? 1 - progress : progress;
-    edges.push({ key, from: source, to: target, opacity });
+  const brokenArray = Array.from(broken);
+  const formedArray = Array.from(formed);
+  const pairedBroken = new Set();
+  const pairedFormed = new Set();
+
+  for (const b of brokenArray) {
+    const [b1, b2] = parseUndirected(b);
+    for (const f of formedArray) {
+      if (pairedFormed.has(f)) continue;
+      const [f1, f2] = parseUndirected(f);
+      
+      const sharedNode = b1 === f1 || b1 === f2 ? b1 : b2 === f1 || b2 === f2 ? b2 : null;
+      if (sharedNode !== null) {
+        pairedBroken.add(b);
+        pairedFormed.add(f);
+        
+        const bOther = b1 === sharedNode ? b2 : b1;
+        const fOther = f1 === sharedNode ? f2 : f1;
+        
+        const pivot = nodeMap.get(sharedNode);
+        const sourceFrom = nodeMap.get(bOther);
+        const sourceTo = nodeMap.get(fOther);
+        
+        if (pivot && sourceFrom && sourceTo) {
+          const dynamicOther = {
+            x: sourceFrom.x + (sourceTo.x - sourceFrom.x) * progress,
+            y: sourceFrom.y + (sourceTo.y - sourceFrom.y) * progress,
+          };
+          
+          const formedKey = toUndirected.get(f);
+          const [fU] = formedKey.split("->").map(Number);
+          
+          if (fU === sharedNode) {
+            edges.push({ key: formedKey, from: pivot, to: dynamicOther, opacity: 1 });
+          } else {
+            edges.push({ key: formedKey, from: dynamicOther, to: pivot, opacity: 1 });
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  for (const b of brokenArray) {
+    if (pairedBroken.has(b)) continue;
+    const key = fromUndirected.get(b);
+    const [u, v] = key.split("->").map(Number);
+    const source = nodeMap.get(u);
+    const target = nodeMap.get(v);
+    if (source && target) edges.push({ key, from: source, to: target, opacity: 1 - progress });
+  }
+
+  for (const f of formedArray) {
+    if (pairedFormed.has(f)) continue;
+    const key = toUndirected.get(f);
+    const [u, v] = key.split("->").map(Number);
+    const source = nodeMap.get(u);
+    const target = nodeMap.get(v);
+    if (source && target) edges.push({ key, from: source, to: target, opacity: progress });
   }
 
   const widthFrom = fromLayout?.width ?? toLayout?.width ?? 0;
@@ -309,9 +400,10 @@ const interpolateLayout = (fromLayout, toLayout, progress) => {
   };
 };
 
-function ActionButton({ children, onClick, variant = "neutral", disabled = false }) {
+function ActionButton({ children, onClick, variant = "neutral", disabled = false, icon: Icon }) {
   return (
     <button type="button" className={`btn ${variant}`} onClick={onClick} disabled={disabled}>
+      {Icon && <Icon size={14} className="btn-icon" />}
       {children}
     </button>
   );
@@ -328,59 +420,190 @@ function LegendDot({ fill, stroke, label }) {
   );
 }
 
+function NodeTooltip({ meta, frame, isFocused, type }) {
+  if (!meta) return null;
+
+  const isViolation = type === "AVL" && meta.bf !== null ? Math.abs(meta.bf) > 1 : false;
+
+  return (
+    <div
+      className={`node-tooltip ${isFocused ? "focused-tooltip" : ""} ${isViolation ? "violation-tooltip" : ""}`}
+      style={{
+        left: meta.x,
+        top: meta.y - 14,
+      }}
+    >
+      <div className="tooltip-header" style={{ borderColor: meta.palette.stroke }}>
+        <span className="tooltip-val" style={{ color: meta.palette.stroke }}>Node {meta.value}</span>
+        {type === "AVL" && meta.bf !== null && (
+          <span className={`tooltip-badge ${Math.abs(meta.bf) > 1 ? "bad" : "good"}`}>
+            BF: {meta.bf > 0 ? `+${meta.bf}` : meta.bf}
+          </span>
+        )}
+        {type === "RB" && (
+          <span className={`tooltip-badge ${meta.node.color === "R" ? "red-badge" : "black-badge"}`}>
+            {meta.node.color === "R" ? "Red" : "Black"}
+          </span>
+        )}
+      </div>
+
+      <div className="tooltip-metrics">
+        {type === "AVL" && <span>Height: {meta.node.h}</span>}
+      </div>
+
+      {(isFocused || isViolation) && (
+        <div className="tooltip-explanation">
+          {isFocused && frame?.explanation ? (
+            <p className="explanation-text"><strong>Current Action:</strong> {frame.explanation}</p>
+          ) : isViolation ? (
+            <p className="explanation-text warning">
+              <strong>Threshold Exceeded:</strong> Balance factor (|BF| {">"} 1) violated. Requires restructuring.
+            </p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LearnPanel() {
   const cards = [
     {
+      id: "bst",
       title: "Shared BST Base",
-      points: [
-        "One canonical binary node contract (value + left/right).",
-        "Search path, traversals, min/max, predecessor/successor are shared.",
-        "BST insert/delete form the foundation layer.",
+      intro:
+        "Every tree mode in this lab starts from the same binary-search-tree contract: each node has one value, a left child for smaller values, and a right child for larger values.",
+      how: [
+        "Insert walks the search path until an empty slot is found.",
+        "Delete handles leaf removal, single-child bypass, or in-order successor replacement.",
+      ],
+      why: [
+        "Keeps behavior consistent across BST, AVL, and Red-Black modes.",
+        "Algorithm differences are easier to compare when balancing logic is layered.",
       ],
     },
     {
+      id: "avl",
       title: "AVL Layer",
-      points: [
-        "Adds only height metadata and rebalancing rotations.",
-        "Trace frames expose where each rotation occurs.",
-        "Great for strict balancing visualization.",
+      intro:
+        "AVL augments each node with height metadata and restores strict balance after updates so lookups stay predictably fast.",
+      how: [
+        "Subtree heights are recalculated bottom-up after each update.",
+        "Balance factor (left minus right height) is strictly maintained.",
+        "Imbalances are fixed using single or double rotations (LL, RR, LR, RL).",
+      ],
+      why: [
+        "Maintains tighter balance than Red-Black, improving lookup consistency.",
+        "The timeline highlights precisely where and why each rotation happens.",
       ],
     },
     {
+      id: "rb",
       title: "Red-Black Layer",
-      points: [
-        "Adds color metadata and color/rotation constraints.",
-        "Preserves logarithmic height with fewer rotations on average.",
-        "Runs on the same base node model.",
+      intro:
+        "Red-Black trees use node color rules instead of explicit height factors to keep tree height logarithmic with fewer rotations on average.",
+      how: [
+        "Insertions begin with a red node; fix-up rules resolve violations through recolors and rotations.",
+        "Enforces invariants: black root, no adjacent red nodes, equal black height paths.",
+      ],
+      why: [
+        "Often performs fewer rebalances during mixed insert/delete workloads.",
+        "Case-by-case trace frames make color flips easy to follow.",
       ],
     },
     {
-      title: "Animation Controls",
-      points: [
-        "All structural modifications produce a timeline.",
-        "Step forward/backward, pause/play, replay, and change speed.",
-        "Smooth interpolation prevents instant visual jumps.",
+      id: "timeline",
+      title: "Animation & Replay",
+      intro:
+        "Each structural operation is captured as an ordered frame sequence so you can inspect state transitions instead of only final results.",
+      how: [
+        "The scrubber maps one-to-one to recorded frames.",
+        "Play/Pause, Prev/Next, and Replay let you inspect quickly or frame-by-frame.",
+        "Operation history stores prior traces to replay specific inserts/deletes later.",
+      ],
+      why: [
+        "Replay-first interaction turns balancing into a debuggable process.",
+        "You can visually compare identical value sequences across the different tree variants.",
       ],
     },
   ];
 
   return (
-    <section className="learn-grid">
-      {cards.map((card) => (
-        <article key={card.title} className="learn-card">
-          <h3>{card.title}</h3>
-          <ul>
-            {card.points.map((point) => (
-              <li key={point}>{point}</li>
-            ))}
-          </ul>
-        </article>
-      ))}
-    </section>
+    <div className="learn-container">
+      <header className="learn-header">
+        <h2>Core Concepts</h2>
+        <p>Understand the foundational mechanics and architectural differences behind tree variants.</p>
+      </header>
+      <section className="learn-grid">
+        {cards.map((card, index) => (
+          <article key={card.title} className={`learn-card theme-${card.id}`}>
+            <div className="card-glass-layer" />
+            <div className="card-content">
+              <div className="card-header">
+                <span className="card-number">0{index + 1}</span>
+                <h3>{card.title}</h3>
+              </div>
+              <p className="learn-card-intro">{card.intro}</p>
+
+              <div className="card-body">
+                <div className="card-section">
+                  <h4>How it works</h4>
+                  <ul>
+                    {card.how.map((point) => (
+                      <li key={point}>{point}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="card-section">
+                  <h4>Why it matters</h4>
+                  <ul>
+                    {card.why.map((point) => (
+                      <li key={point}>{point}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </article>
+        ))}
+      </section>
+    </div>
   );
 }
 
-function TreeWorkspace({ type, root, onRoot, onHistory, history, session, onSessionChange }) {
+function ConceptSwitcher({ tabs, activeTab, onSwitchTab, className = "" }) {
+  return (
+    <nav className={`concept-switcher ${className}`.trim()} aria-label="Tree concept switcher" role="tablist">
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          onClick={() => onSwitchTab(tab.key)}
+          className={`switcher-btn ${activeTab === tab.key ? "active" : ""}`}
+          role="tab"
+          aria-selected={activeTab === tab.key}
+          aria-controls={`panel-${tab.key}`}
+          id={`switch-${tab.key}`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function TreeWorkspace({
+  type,
+  root,
+  onRoot,
+  onHistory,
+  history,
+  session,
+  onSessionChange,
+  tabs,
+  activeTab,
+  onSwitchTab,
+}) {
   const config = TREE_CONFIG[type];
 
   const [input, setInput] = useState("");
@@ -397,18 +620,27 @@ function TreeWorkspace({ type, root, onRoot, onHistory, history, session, onSess
   const [timelineSpeed, setTimelineSpeed] = useState(1);
   const [operationHistory, setOperationHistory] = useState([]);
   const [selectedOperationId, setSelectedOperationId] = useState(null);
+  const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [hoverMeta, setHoverMeta] = useState(null);
 
   const dragRef = useRef({ active: false, startX: 0, startY: 0, panX: 0, panY: 0 });
   const canvasRef = useRef(null);
+  const resizeTimeoutRef = useRef(null);
   const traversalTimerRef = useRef(null);
   const previousLayoutRef = useRef(null);
   const transitionRafRef = useRef(null);
   const operationIdRef = useRef(1);
   const hasTypeInitializedRef = useRef(false);
   const restoredTypeRef = useRef(null);
+  const speedMenuRef = useRef(null);
+  const sidebarStateRef = useRef({ leftOpen: true, rightOpen: true });
   const historySignature = useMemo(() => getHistorySignature(history), [history]);
 
   const [transitionState, setTransitionState] = useState(null);
@@ -436,14 +668,6 @@ function TreeWorkspace({ type, root, onRoot, onHistory, history, session, onSess
     [operationHistory, selectedOperationId],
   );
 
-  const replaySteps = useMemo(
-    () =>
-      timelineState.frames
-        .map((frame, index) => ({ frame, index }))
-        .filter(({ frame }) => frame.kind !== "visit"),
-    [timelineState.frames],
-  );
-
   const layoutOptions = useMemo(
     () => ({
       nodeRadius: NODE_RADIUS,
@@ -460,7 +684,7 @@ function TreeWorkspace({ type, root, onRoot, onHistory, history, session, onSess
     if (!currentLayout || !canvasRef.current) return;
 
     const svgWidth = canvasRef.current.clientWidth || 760;
-    const svgHeight = 428;
+    const svgHeight = canvasRef.current.clientHeight || 540;
 
     const nextZoom = parseFloat(
       Math.min(1.45, (svgWidth - 24) / currentLayout.width, (svgHeight - 24) / currentLayout.height).toFixed(3),
@@ -469,13 +693,59 @@ function TreeWorkspace({ type, root, onRoot, onHistory, history, session, onSess
     setZoom(nextZoom);
     setPan({
       x: Math.max(0, (svgWidth - currentLayout.width * nextZoom) / 2),
-      y: 14,
+      y: Math.max(14, (svgHeight - currentLayout.height * nextZoom) / 2),
     });
   }, [currentLayout]);
 
   useEffect(() => {
     fitCanvas();
   }, [fitCanvas]);
+
+  useEffect(() => {
+    if (!canvasRef.current) return undefined;
+
+    const observer = new ResizeObserver(() => {
+      setIsResizing(true);
+      fitCanvas();
+
+      if (resizeTimeoutRef.current) clearTimeout(resizeTimeoutRef.current);
+      resizeTimeoutRef.current = setTimeout(() => {
+        setIsResizing(false);
+      }, 100);
+    });
+
+    observer.observe(canvasRef.current);
+    return () => {
+      observer.disconnect();
+      if (resizeTimeoutRef.current) clearTimeout(resizeTimeoutRef.current);
+    };
+  }, [fitCanvas]);
+
+  useEffect(() => {
+    if (!speedMenuOpen) return undefined;
+
+    const closeIfOutside = (event) => {
+      if (!speedMenuRef.current?.contains(event.target)) {
+        setSpeedMenuOpen(false);
+      }
+    };
+
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setSpeedMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeIfOutside);
+    document.addEventListener("touchstart", closeIfOutside);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", closeIfOutside);
+      document.removeEventListener("touchstart", closeIfOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [speedMenuOpen]);
 
   useEffect(
     () => () => {
@@ -580,45 +850,46 @@ function TreeWorkspace({ type, root, onRoot, onHistory, history, session, onSess
 
       const targetConfig = TREE_CONFIG[type];
       let replayRoot = null;
-      const replayFrames = [];
+      const operationHistory = [];
 
       replayValues.forEach((value, index) => {
         const path = searchPath(replayRoot, value).path;
         const trace = targetConfig.traceInsert(replayRoot, value);
+        const actionLabel = "Insert";
         const frames = buildTimeline({
           beforeRoot: replayRoot,
           path,
           traceFrames: trace.frames,
           afterRoot: trace.root,
-          actionLabel: `Reinsert #${index + 1}`,
+          actionLabel,
           value,
         });
 
-        replayFrames.push(...frames);
+        const id = `seed-${index}-${Date.now()}-${type.toLowerCase()}`;
+
+        operationHistory.unshift({
+          id,
+          title: `${actionLabel} ${value}`,
+          summary: summarizeFrames(frames, `Inserted ${value}.`),
+          frames,
+          timeLabel: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }),
+        });
+
         replayRoot = trace.root;
       });
 
-      const frames = dedupeFrames(replayFrames);
-      const id = `seed-${Date.now()}-${type.toLowerCase()}`;
+      const selectedOp = operationHistory[0] || {};
 
       return {
-        operationHistory: [
-          {
-            id,
-            title: `Reinsert ${replayValues.length} values (${targetConfig.shortLabel})`,
-            summary: `Replayed ${replayValues.length} existing inserts to rebuild ${targetConfig.title}.`,
-            frames,
-            timeLabel: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            }),
-          },
-        ],
-        selectedOperationId: id,
+        operationHistory: operationHistory.slice(0, 30),
+        selectedOperationId: selectedOp.id || null,
         timelineState: {
-          frames,
-          index: 0,
+          frames: selectedOp.frames || [],
+          index: selectedOp.frames ? selectedOp.frames.length - 1 : 0,
           playing: false,
         },
         timelineSpeed: 1,
@@ -1026,7 +1297,6 @@ function TreeWorkspace({ type, root, onRoot, onHistory, history, session, onSess
     if (pathSet.has(value)) return { fill: "#FDE68A", stroke: "#B45309", text: "#6B3410" };
     if (currentTraversalValue === value) return { fill: "#818CF8", stroke: "#3730A3", text: "#FFFFFF" };
     if (visitedTraversalValues.has(value)) return { fill: "#C7D2FE", stroke: "#4338CA", text: "#1E1B4B" };
-    if (frameFocusSet.has(value)) return { fill: "#BAE6FD", stroke: "#0369A1", text: "#0C4A6E" };
 
     if (type === "RB") {
       return node.color === "R"
@@ -1045,343 +1315,479 @@ function TreeWorkspace({ type, root, onRoot, onHistory, history, session, onSess
   };
 
   const extraMetric = config.extraMetric(root);
-
   return (
     <section className="workspace">
-      <div className="toolbar-row">
-        <label htmlFor="tree-value-input" className="input-label">Value</label>
-        <input
-          id="tree-value-input"
-          value={input}
-          type="number"
-          placeholder="integer"
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={(event) => event.key === "Enter" && onInsert()}
-          className="value-input"
-          disabled={isTimelinePlaying}
-        />
-
-        <ActionButton variant="success" onClick={onInsert} disabled={isTimelinePlaying}>Insert</ActionButton>
-        <ActionButton variant="danger" onClick={onDelete} disabled={isTimelinePlaying}>Delete</ActionButton>
-        <ActionButton onClick={onSearch} disabled={isTimelinePlaying}>Search</ActionButton>
-        <ActionButton onClick={clearSearch}>Clear Highlight</ActionButton>
-
-        <details className="secondary-actions">
-          <summary>More</summary>
-          <div className="secondary-actions-body">
-            <ActionButton
-              onClick={() =>
-                treeMin(root) === null
-                  ? setError("Tree is empty.")
-                  : setOk(`Minimum: ${treeMin(root)}`)
-              }
-              disabled={isTimelinePlaying}
-            >
-              Min
-            </ActionButton>
-            <ActionButton
-              onClick={() =>
-                treeMax(root) === null
-                  ? setError("Tree is empty.")
-                  : setOk(`Maximum: ${treeMax(root)}`)
-              }
-              disabled={isTimelinePlaying}
-            >
-              Max
-            </ActionButton>
-            <ActionButton onClick={onRandomInsert} disabled={isTimelinePlaying}>Random</ActionButton>
-            <ActionButton onClick={onClearAll} disabled={isTimelinePlaying}>Clear All</ActionButton>
+      <div
+        className={`workspace-layout ${leftSidebarOpen ? "" : "left-sidebar-collapsed"} ${
+          rightSidebarOpen ? "" : "right-sidebar-collapsed"
+        }`.trim()}
+      >
+        <aside className={`control-sidebar ${leftSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Control panel">
+          <div className="sidebar-head">
+            <ConceptSwitcher tabs={tabs} activeTab={activeTab} onSwitchTab={onSwitchTab} className="sidebar-switcher" />
           </div>
-        </details>
 
-        <span className={`status-pill ${message.ok ? "good" : "bad"}`}>{message.text}</span>
-      </div>
+          <section className="sidebar-section">
+            <div className="section-heading-row">
+              <h2>Actions</h2>
+            </div>
 
-      <div className="timeline-panel">
-        <div className="timeline-controls-row">
-          <span className="toolbar-label">Modification Playback</span>
-
-          <ActionButton onClick={timelineBack} disabled={!timelineHasFrames}>Prev</ActionButton>
-          <ActionButton onClick={toggleTimelinePlay} disabled={!timelineHasFrames}>
-            {timelineState.playing ? "Pause" : "Play"}
-          </ActionButton>
-          <ActionButton onClick={timelineNext} disabled={!timelineHasFrames}>Next</ActionButton>
-          <ActionButton onClick={replayTimeline} disabled={!timelineHasFrames}>Replay</ActionButton>
-
-          <label className="speed-label" htmlFor="timeline-speed">Speed</label>
-          <select
-            id="timeline-speed"
-            value={timelineSpeed}
-            onChange={(event) => setTimelineSpeed(Number(event.target.value))}
-            className="speed-select"
-          >
-            {[0.5, 0.75, 1, 1.25, 1.5, 2, 3].map((speed) => (
-              <option key={speed} value={speed}>{speed}x</option>
-            ))}
-          </select>
-
-          <span className="sequence-readout">
-            {timelineHasFrames
-              ? `Frame ${timelineState.index + 1}/${timelineState.frames.length} | ${timelineFrame?.label ?? ""}`
-              : "No modification timeline yet."}
-          </span>
-        </div>
-
-        <div className="timeline-inspector compact">
-          <div className="timeline-topline">
-            <span className={`frame-kind-badge tone-${frameKindMeta.tone}`}>{frameKindMeta.label}</span>
-            <span className="frame-title">{timelineFrame?.label ?? "Awaiting first operation..."}</span>
-          </div>
-          <p className="frame-explanation">{frameExplanation}</p>
-          {timelineFrame?.focus?.length > 0 && (
-            <span className="focus-readout">Focus nodes: {timelineFrame.focus.join(" -> ")}</span>
-          )}
-
-          <div className="timeline-slider-row">
+            <label htmlFor="tree-value-input" className="input-label">Value</label>
             <input
-              type="range"
-              min={0}
-              max={Math.max(0, timelineState.frames.length - 1)}
-              value={timelineState.frames.length ? timelineState.index : 0}
-              onChange={(event) => jumpToFrame(Number(event.target.value))}
-              disabled={!timelineHasFrames}
+              id="tree-value-input"
+              value={input}
+              type="number"
+              placeholder="integer"
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && onInsert()}
+              className="value-input"
+              disabled={isTimelinePlaying}
             />
-          </div>
 
-          {replaySteps.length > 0 && (
-            <div className="step-chip-row">
-              {replaySteps.map(({ frame, index }) => (
-                <button
-                  key={`${frame.label}-${index}`}
-                  type="button"
-                  className={`step-chip ${timelineState.index === index ? "active" : ""}`}
-                  onClick={() => jumpToFrame(index)}
+            <div className="action-grid">
+              <ActionButton variant="success" onClick={onInsert} disabled={isTimelinePlaying} icon={Plus}>Insert</ActionButton>
+              <ActionButton variant="danger" onClick={onDelete} disabled={isTimelinePlaying} icon={Trash2}>Delete</ActionButton>
+              <ActionButton onClick={onSearch} disabled={isTimelinePlaying} icon={Search}>Search</ActionButton>
+              <ActionButton onClick={clearSearch} icon={Eraser}>Clear Highlight</ActionButton>
+            </div>
+
+            <details className="secondary-actions sidebar-secondary">
+              <summary>More actions</summary>
+              <div className="secondary-actions-body">
+                <ActionButton
+                  onClick={() =>
+                    treeMin(root) === null
+                      ? setError("Tree is empty.")
+                      : setOk(`Minimum: ${treeMin(root)}`)
+                  }
+                  disabled={isTimelinePlaying}
+                  icon={ArrowDownToLine}
                 >
-                  {index + 1}. {frame.label}
+                  Min
+                </ActionButton>
+                <ActionButton
+                  onClick={() =>
+                    treeMax(root) === null
+                      ? setError("Tree is empty.")
+                      : setOk(`Maximum: ${treeMax(root)}`)
+                  }
+                  disabled={isTimelinePlaying}
+                  icon={ArrowUpToLine}
+                >
+                  Max
+                </ActionButton>
+                <ActionButton onClick={onRandomInsert} disabled={isTimelinePlaying} icon={Dices}>Random</ActionButton>
+                <ActionButton onClick={onClearAll} disabled={isTimelinePlaying} icon={Trash}>Clear All</ActionButton>
+              </div>
+            </details>
+
+            <span className={`status-pill ${message.ok ? "good" : "bad"}`}>{message.text}</span>
+          </section>
+
+          <section className="sidebar-section">
+            <div className="section-heading-row">
+              <h2>Traverse</h2>
+            </div>
+
+            <div className="traverse-grid">
+              {TRAVERSALS.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => startTraversal(option.label, option.run)}
+                  className={`chip ${traversal.name === option.label ? "active" : ""}`}
+                  disabled={isTimelinePlaying}
+                >
+                  {option.label}
                 </button>
               ))}
             </div>
-          )}
-        </div>
-      </div>
 
-      <div className="toolbar-row secondary">
-        <span className="toolbar-label">Traverse</span>
-
-        {TRAVERSALS.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => startTraversal(option.label, option.run)}
-            className={`chip ${traversal.name === option.label ? "active" : ""}`}
-            disabled={isTimelinePlaying}
-          >
-            {option.label}
-          </button>
-        ))}
-
-        {traversal.values.length > 0 && (
-          <span className="sequence-readout">
-            {traversal.name}:{" "}
-            {traversal.values.map((value, idx) => (idx === traversal.index ? `[${value}]` : value)).join(", ")}
-          </span>
-        )}
-      </div>
-
-      <div className="metrics-row">
-        <span>Nodes: <b>{treeSize(root)}</b></span>
-        <span>Height: <b>{treeHeight(root)}</b></span>
-        <span>Min: <b>{treeMin(root) ?? "-"}</b></span>
-        <span>Max: <b>{treeMax(root) ?? "-"}</b></span>
-        {extraMetric && <span>{extraMetric}</span>}
-
-        <div className="zoom-controls">
-          <button type="button" onClick={() => setZoom((value) => parseFloat(Math.min(4, value * 1.2).toFixed(3)))}>+</button>
-          <span>{Math.round(zoom * 100)}%</span>
-          <button type="button" onClick={() => setZoom((value) => parseFloat(Math.max(0.1, value / 1.2).toFixed(3)))}>-</button>
-          <button type="button" onClick={fitCanvas}>Fit</button>
-        </div>
-      </div>
-
-      <div className="canvas-shell">
-        {!visualRoot && <div className="empty-state">Tree is empty. Insert a value to start.</div>}
-
-        <svg
-          ref={canvasRef}
-          width="100%"
-          height="428"
-          className="tree-canvas"
-          onMouseDown={(event) => {
-            dragRef.current = {
-              active: true,
-              startX: event.clientX,
-              startY: event.clientY,
-              panX: pan.x,
-              panY: pan.y,
-            };
-          }}
-          onMouseMove={(event) => {
-            if (!dragRef.current.active) return;
-            setPan({
-              x: dragRef.current.panX + event.clientX - dragRef.current.startX,
-              y: dragRef.current.panY + event.clientY - dragRef.current.startY,
-            });
-          }}
-          onMouseUp={() => {
-            dragRef.current.active = false;
-          }}
-          onMouseLeave={() => {
-            dragRef.current.active = false;
-          }}
-        >
-          <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
-            {animatedGraph?.edges.map((edge) => {
-              const dx = edge.to.x - edge.from.x;
-              const dy = edge.to.y - edge.from.y;
-              const distance = Math.hypot(dx, dy);
-              const nx = dx / distance;
-              const ny = dy / distance;
-              const isFocusEdge = focusEdgeKeys.has(edge.key);
-
-              return (
-                <line
-                  key={edge.key}
-                  x1={edge.from.x + nx * NODE_RADIUS}
-                  y1={edge.from.y + ny * NODE_RADIUS}
-                  x2={edge.to.x - nx * NODE_RADIUS}
-                  y2={edge.to.y - ny * NODE_RADIUS}
-                  className={`tree-edge ${isFocusEdge ? `tone-${frameKindMeta.tone}` : ""}`}
-                  strokeWidth={isFocusEdge ? 2.7 : 1.5}
-                  opacity={edge.opacity}
-                />
-              );
-            })}
-
-            {focusConnector && (
-              <line
-                x1={focusConnector.from.x}
-                y1={focusConnector.from.y}
-                x2={focusConnector.to.x}
-                y2={focusConnector.to.y}
-                className={`focus-link tone-${frameKindMeta.tone}`}
-              />
+            {traversal.values.length > 0 && (
+              <span className="sequence-readout sidebar-readout">
+                {traversal.name}:{" "}
+                {traversal.values.map((value, idx) => (idx === traversal.index ? `[${value}]` : value)).join(", ")}
+              </span>
             )}
+          </section>
 
-            {animatedGraph?.nodes.map((nodeMeta) => {
-              const palette = getNodePalette(nodeMeta);
-              const bf = type === "AVL" ? (nodeMeta.node.left?.h ?? 0) - (nodeMeta.node.right?.h ?? 0) : null;
-              const focusIdx = frameFocusIndex.get(nodeMeta.value);
+          <section className="sidebar-section legend-section" style={{ marginTop: "auto", borderTop: "1px dashed rgba(203, 213, 225, 0.6)", paddingTop: "12px", gap: "6px" }}>
+             <div className="section-heading-row" style={{ marginBottom: "6px" }}>
+              <h2>Legend</h2>
+            </div>
+            <div className="legend-list" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {typeLegend.map((entry) => (
+                <LegendDot key={entry.label} fill={entry.fill} stroke={entry.stroke} label={entry.label} />
+              ))}
+              <LegendDot fill="#FDE68A" stroke="#B45309" label="Search path" />
+              <LegendDot fill="#FACC15" stroke="#A16207" label="Search hit" />
+              <LegendDot fill="#C7D2FE" stroke="#4338CA" label="Traversal visited" />
+              <LegendDot fill="#818CF8" stroke="#3730A3" label="Traversal current" />
+              <LegendDot fill="#BAE6FD" stroke="#0369A1" label="Timeline focus" />
+            </div>
+          </section>
+        </aside>
 
-              return (
-                <g key={nodeMeta.value} opacity={nodeMeta.opacity}>
-                  {frameFocusSet.has(nodeMeta.value) && (
-                    <circle
-                      cx={nodeMeta.x}
-                      cy={nodeMeta.y}
-                      r={focusIdx === 0 ? NODE_RADIUS + 9 : NODE_RADIUS + 7}
-                      fill="none"
-                      className={`focus-ring tone-${frameKindMeta.tone}`}
-                    />
-                  )}
+        <section className="canvas-stage" aria-label="Tree visualization">
+          <div className="canvas-overlay stats-overlay-group">
+            <button
+              type="button"
+              className="sidebar-toggle-btn canvas-top-btn icon-toggle"
+              aria-label={leftSidebarOpen ? "Hide left sidebar" : "Show left sidebar"}
+              aria-expanded={leftSidebarOpen}
+              onClick={() => setLeftSidebarOpen((value) => !value)}
+            >
+              <span aria-hidden="true" className="toggle-icon">
+                {leftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+              </span>
+            </button>
 
-                  {currentTraversalValue === nodeMeta.value && (
-                    <circle
-                      cx={nodeMeta.x}
-                      cy={nodeMeta.y}
-                      r={NODE_RADIUS + 5}
-                      fill="none"
-                      stroke="#6366F1"
-                      strokeWidth="2.4"
-                      opacity="0.8"
-                    />
-                  )}
-
-                  <circle
-                    cx={nodeMeta.x}
-                    cy={nodeMeta.y}
-                    r={NODE_RADIUS}
-                    fill={palette.fill}
-                    stroke={palette.stroke}
-                    strokeWidth="1.6"
-                  />
-
-                  <text
-                    x={nodeMeta.x}
-                    y={bf === null ? nodeMeta.y : nodeMeta.y - 5}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    className="node-label"
-                    fill={palette.text}
-                  >
-                    {nodeMeta.value}
-                  </text>
-
-                  {bf !== null && (
-                    <text
-                      x={nodeMeta.x}
-                      y={nodeMeta.y + 10}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      className="node-sub-label"
-                      fill={palette.stroke}
-                    >
-                      {bf > 0 ? "+" : ""}
-                      {bf}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-      </div>
-
-      <div className="history-panel">
-        <div className="history-header">
-          <span>Operation History</span>
-          <span>{operationHistory.length} recorded</span>
-          <button
-            type="button"
-            className="history-replay-btn"
-            onClick={() => selectedOperation && loadOperation(selectedOperation.id, true)}
-            disabled={!selectedOperation}
-          >
-            Replay selected
-          </button>
-        </div>
-
-        {operationHistory.length === 0 ? (
-          <p className="history-empty">Insert or delete nodes to build a replayable history.</p>
-        ) : (
-          <div className="history-list">
-            {operationHistory.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                className={`history-item ${selectedOperationId === entry.id ? "active" : ""}`}
-                onClick={() => loadOperation(entry.id, false)}
-              >
-                <span className="history-item-title">{entry.title}</span>
-                <span className="history-item-meta">{entry.timeLabel} | {entry.frames.length} frames</span>
-                <span className="history-item-summary">{entry.summary}</span>
-              </button>
-            ))}
+            <div className="stats-overlay" aria-label="Tree statistics">
+              <span>Nodes: <b>{treeSize(root)}</b></span>
+              <span>Leaves: <b>{treeLeavesCount(root)}</b></span>
+              <span>Internal: <b>{treeInternalNodesCount(root)}</b></span>
+              <span>Height: <b>{treeHeight(root)}</b></span>
+              <span>Min: <b>{treeMin(root) ?? "-"}</b></span>
+              <span>Max: <b>{treeMax(root) ?? "-"}</b></span>
+              {extraMetric && <span>{extraMetric}</span>}
+            </div>
           </div>
-        )}
-      </div>
 
-      <div className="legend-row">
-        {typeLegend.map((entry) => (
-          <LegendDot key={entry.label} fill={entry.fill} stroke={entry.stroke} label={entry.label} />
-        ))}
+          <div className="canvas-overlay right-sidebar-overlay">
+            <button
+              type="button"
+              className="sidebar-toggle-btn canvas-top-btn icon-toggle"
+              aria-label={rightSidebarOpen ? "Hide right sidebar" : "Show right sidebar"}
+              aria-expanded={rightSidebarOpen}
+              onClick={() => setRightSidebarOpen((value) => !value)}
+            >
+              <span aria-hidden="true" className="toggle-icon">
+                {rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+              </span>
+            </button>
+          </div>
 
-        <LegendDot fill="#FDE68A" stroke="#B45309" label="Search path" />
-        <LegendDot fill="#FACC15" stroke="#A16207" label="Search hit" />
-        <LegendDot fill="#C7D2FE" stroke="#4338CA" label="Traversal visited" />
-        <LegendDot fill="#818CF8" stroke="#3730A3" label="Traversal current" />
-        <LegendDot fill="#BAE6FD" stroke="#0369A1" label="Timeline focus" />
+          <div className="zoom-controls vertical" role="group" aria-label="Zoom controls">
+            <button
+              type="button"
+              onClick={() => setZoom((value) => parseFloat(Math.min(4, value * 1.2).toFixed(3)))}
+              aria-label="Zoom in"
+            >
+              <ZoomIn size={14} className="btn-icon" />
+            </button>
+            <span>{Math.round(zoom * 100)}%</span>
+            <button
+              type="button"
+              onClick={() => setZoom((value) => parseFloat(Math.max(0.1, value / 1.2).toFixed(3)))}
+              aria-label="Zoom out"
+            >
+              <ZoomOut size={14} className="btn-icon" />
+            </button>
+            <button type="button" onClick={fitCanvas} aria-label="Fit tree to canvas">
+              <Maximize size={14} className="btn-icon" />
+            </button>
+          </div>
 
-        <span className="legend-hint">Wheel to zoom, drag to pan.</span>
+          <div className="canvas-shell">
+            {!visualRoot && <div className="empty-state">Tree is empty. Insert a value to start.</div>}
+
+            <svg
+              ref={canvasRef}
+              width="100%"
+              height="100%"
+              className="tree-canvas"
+              onMouseDown={(event) => {
+                dragRef.current = {
+                  active: true,
+                  startX: event.clientX,
+                  startY: event.clientY,
+                  panX: pan.x,
+                  panY: pan.y,
+                };
+                setIsDragging(true);
+                setHoverMeta(null);
+              }}
+              onMouseMove={(event) => {
+                if (!dragRef.current.active) return;
+                setPan({
+                  x: dragRef.current.panX + event.clientX - dragRef.current.startX,
+                  y: dragRef.current.panY + event.clientY - dragRef.current.startY,
+                });
+              }}
+              onMouseUp={() => {
+                dragRef.current.active = false;
+                setIsDragging(false);
+              }}
+              onMouseLeave={() => {
+                dragRef.current.active = false;
+                setIsDragging(false);
+              }}
+              onWheel={(event) => {
+                if (event.deltaY < 0) {
+                  setZoom((value) => parseFloat(Math.min(4, value * 1.1).toFixed(3)));
+                } else {
+                  setZoom((value) => parseFloat(Math.max(0.1, value / 1.1).toFixed(3)));
+                }
+              }}
+            >
+              <g className={`canvas-zoom-layer ${isDragging || isResizing ? "dragging" : ""}`} transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
+                {animatedGraph?.edges.map((edge) => {
+                  const dx = edge.to.x - edge.from.x;
+                  const dy = edge.to.y - edge.from.y;
+                  const distance = Math.hypot(dx, dy);
+                  const nx = dx / distance;
+                  const ny = dy / distance;
+                  const isFocusEdge = focusEdgeKeys.has(edge.key);
+
+                  return (
+                    <line
+                      key={edge.key}
+                      x1={edge.from.x + nx * NODE_RADIUS}
+                      y1={edge.from.y + ny * NODE_RADIUS}
+                      x2={edge.to.x - nx * NODE_RADIUS}
+                      y2={edge.to.y - ny * NODE_RADIUS}
+                      className={`tree-edge ${isFocusEdge ? `tone-${frameKindMeta.tone}` : ""}`}
+                      strokeWidth={isFocusEdge ? 2.7 : 1.5}
+                      opacity={edge.opacity}
+                    />
+                  );
+                })}
+
+                {focusConnector && (
+                  <line
+                    x1={focusConnector.from.x}
+                    y1={focusConnector.from.y}
+                    x2={focusConnector.to.x}
+                    y2={focusConnector.to.y}
+                    className={`focus-link tone-${frameKindMeta.tone}`}
+                  />
+                )}
+
+                {animatedGraph?.nodes.map((nodeMeta) => {
+                  const palette = getNodePalette(nodeMeta);
+                  const bf = type === "AVL" ? (nodeMeta.node.left?.h ?? 0) - (nodeMeta.node.right?.h ?? 0) : null;
+                  const focusIdx = frameFocusIndex.get(nodeMeta.value);
+
+                  return (
+                    <g 
+                      key={nodeMeta.value} 
+                      opacity={nodeMeta.opacity}
+                      onMouseEnter={(e) => {
+                        if (isDragging || isResizing) return;
+                        setHoverMeta({
+                          value: nodeMeta.value,
+                          node: nodeMeta.node,
+                          bf,
+                          palette,
+                          x: e.clientX,
+                          y: e.clientY,
+                        });
+                      }}
+                      onMouseMove={(e) => {
+                        if (isDragging || isResizing) return;
+                        setHoverMeta(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
+                      }}
+                      onMouseLeave={() => setHoverMeta(null)}
+                      style={{ cursor: "pointer", pointerEvents: "all" }}
+                    >
+                      {frameFocusSet.has(nodeMeta.value) && (
+                        <circle
+                          cx={nodeMeta.x}
+                          cy={nodeMeta.y}
+                          r={focusIdx === 0 ? NODE_RADIUS + 9 : NODE_RADIUS + 7}
+                          fill="none"
+                          className={`focus-ring tone-${frameKindMeta.tone}`}
+                        />
+                      )}
+
+                      {currentTraversalValue === nodeMeta.value && (
+                        <circle
+                          cx={nodeMeta.x}
+                          cy={nodeMeta.y}
+                          r={NODE_RADIUS + 5}
+                          fill="none"
+                          stroke="#6366F1"
+                          strokeWidth="2.4"
+                          opacity="0.8"
+                        />
+                      )}
+
+                      <circle
+                        cx={nodeMeta.x}
+                        cy={nodeMeta.y}
+                        r={NODE_RADIUS}
+                        fill={palette.fill}
+                        stroke={palette.stroke}
+                        strokeWidth="1.6"
+                        className="tree-node"
+                      />
+
+                      <text
+                        x={nodeMeta.x}
+                        y={bf === null ? nodeMeta.y : nodeMeta.y - 5}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        className="node-label"
+                        fill={palette.text}
+                      >
+                        {nodeMeta.value}
+                      </text>
+
+                      {bf !== null && (
+                        <text
+                          x={nodeMeta.x}
+                          y={nodeMeta.y + 10}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          className="node-sub-label"
+                          fill={palette.stroke}
+                        >
+                          {bf > 0 ? "+" : ""}
+                          {bf}
+                        </text>
+                      )}
+                    </g>
+                  );
+                })}
+              </g>
+            </svg>
+          </div>
+
+          <div className="playback-dock" role="group" aria-label="Timeline playback controls">
+            <div className="timeline-slider-row">
+              <div
+                className="timeline-splits timeline-splits-track"
+                role="group"
+                aria-label="Timeline frame segments"
+                style={{
+                  gridTemplateColumns: `repeat(${Math.max(1, timelineState.frames.length)}, minmax(10px, 1fr))`,
+                }}
+              >
+                {timelineHasFrames ? (
+                  timelineState.frames.map((frame, index) => (
+                    <button
+                      key={`${frame.label}-${index}`}
+                      type="button"
+                      className={`timeline-split ${
+                        index === timelineState.index ? "active" : index < timelineState.index ? "past" : ""
+                      }`}
+                      onClick={() => jumpToFrame(index)}
+                      aria-label={`Go to frame ${index + 1}: ${frame.label}`}
+                      title={`Frame ${index + 1}: ${frame.label}`}
+                    />
+                  ))
+                ) : (
+                  <span className="timeline-split inactive" aria-hidden="true" />
+                )}
+              </div>
+            </div>
+
+            <div className="playback-controls-row">
+              <ActionButton onClick={timelineBack} disabled={!timelineHasFrames} icon={SkipBack}>Prev</ActionButton>
+              <ActionButton onClick={toggleTimelinePlay} disabled={!timelineHasFrames} icon={timelineState.playing ? Pause : Play}>
+                {timelineState.playing ? "Pause" : "Play"}
+              </ActionButton>
+              <ActionButton onClick={timelineNext} disabled={!timelineHasFrames} icon={SkipForward}>Next</ActionButton>
+              <ActionButton onClick={replayTimeline} disabled={!timelineHasFrames} icon={RotateCcw}>Replay</ActionButton>
+
+              <div className="speed-dropdown-wrap" ref={speedMenuRef}>
+                <span className="speed-label">Speed</span>
+                <button
+                  type="button"
+                  className="speed-dropdown-btn"
+                  onClick={() => setSpeedMenuOpen((open) => !open)}
+                  aria-expanded={speedMenuOpen}
+                  aria-haspopup="listbox"
+                  aria-label="Select timeline speed"
+                >
+                  <span>{timelineSpeed}x</span>
+                  <span className="speed-caret" aria-hidden="true"><ChevronDown size={14} /></span>
+                </button>
+                {speedMenuOpen && (
+                  <ul className="speed-dropdown-menu" role="listbox" aria-label="Timeline speed options">
+                    {SPEED_OPTIONS.map((speed) => (
+                      <li key={speed}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={timelineSpeed === speed}
+                          className={`speed-option-btn ${timelineSpeed === speed ? "active" : ""}`}
+                          onClick={() => {
+                            setTimelineSpeed(speed);
+                            setSpeedMenuOpen(false);
+                          }}
+                        >
+                          {speed}x
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <span className="sequence-readout compact">
+                {timelineHasFrames
+                  ? `Frame ${timelineState.index + 1}/${timelineState.frames.length}`
+                  : "No modification timeline yet."}
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <aside className={`replay-sidebar ${rightSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Timeline and operation history">
+          <section className="sidebar-section timeline-details">
+            <div className="section-heading-row">
+              <h2>Timeline</h2>
+              <span className="section-meta">
+                {timelineHasFrames
+                  ? `Frame ${timelineState.index + 1}/${timelineState.frames.length}`
+                  : "No replay yet"}
+              </span>
+            </div>
+            <div className="timeline-topline">
+              <span className={`frame-kind-badge tone-${frameKindMeta.tone}`}>{frameKindMeta.label}</span>
+              <span className="frame-title">{timelineFrame?.label ?? "Awaiting first operation..."}</span>
+            </div>
+            <p className="frame-explanation">{frameExplanation}</p>
+            {timelineFrame?.focus?.length > 0 && (
+              <span className="focus-readout">Focus nodes: {timelineFrame.focus.join(" -> ")}</span>
+            )}
+          </section>
+
+          <section className="sidebar-section history-sidebar" id="operation-history-list">
+            <div className="history-header">
+              <span>Operation History ({operationHistory.length})</span>
+              <button
+                type="button"
+                className="history-replay-btn"
+                onClick={() => selectedOperation && loadOperation(selectedOperation.id, true)}
+                disabled={!selectedOperation}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                <RotateCcw size={14} /> Replay
+              </button>
+            </div>
+
+            {operationHistory.length === 0 ? (
+              <p className="history-empty">Insert or delete nodes to build a replayable history.</p>
+            ) : (
+              <div className="history-list">
+                {operationHistory.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className={`history-item ${selectedOperationId === entry.id ? "active" : ""}`}
+                    onClick={() => loadOperation(entry.id, false)}
+                  >
+                    <span className="history-item-title">{entry.title}</span>
+                    <span className="history-item-meta">{entry.timeLabel} | {entry.frames.length} frames</span>
+                    <span className="history-item-summary">{entry.summary}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        </aside>
       </div>
     </section>
   );
@@ -1397,6 +1803,7 @@ export default function App() {
     buildTree(persistedRef.current.app.history, TREE_CONFIG[persistedRef.current.app.treeType].insert),
   );
   const [sessionsByType, setSessionsByType] = useState(persistedRef.current.sessionsByType);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   useEffect(() => {
     writePersistedState({
@@ -1441,62 +1848,74 @@ export default function App() {
   ];
 
   return (
-    <main className="app-shell">
-      <header className="app-header">
-        <h1>Modular Binary Tree Lab</h1>
-        <p>
-          One shared BST foundation, layered AVL/RB behavior, and full operation playback with smooth transitions.
-        </p>
-      </header>
+    <>
+      <a href="#maincontent" className="skip-link">Skip to main content</a>
 
-      <nav className="tabs-row" aria-label="Tree view tabs" role="tablist">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => switchTab(tab.key)}
-            className={`tab-btn ${activeTab === tab.key ? "active" : ""}`}
-            role="tab"
-            aria-selected={activeTab === tab.key}
-            aria-controls={`panel-${tab.key}`}
-            id={`tab-${tab.key}`}
-          >
-            {tab.label}
-          </button>
-        ))}
-
-        <span className="tabs-summary">
-          {activeTab === "learn" ? "Architecture first" : TREE_CONFIG[treeType].summary}
-        </span>
-      </nav>
-
-      {activeTab === "learn" ? (
-        <section id="panel-learn" role="tabpanel" aria-labelledby="tab-learn">
-          <LearnPanel />
-        </section>
-      ) : (
-        <section
-          id={`panel-${activeTab}`}
-          role="tabpanel"
-          aria-labelledby={`tab-${activeTab}`}
-          className="tree-panel"
-        >
-          <div className="tree-panel-header">
-            <span className="tree-title">Current type: {TREE_CONFIG[treeType].title}</span>
-            <span className="tree-subtitle">{TREE_CONFIG[treeType].summary}</span>
+      <main id="maincontent" className="app-shell" tabIndex={-1}>
+        <header className="app-header">
+          <div className="app-header-row">
+            <h1>Modular Binary Tree Lab</h1>
+            <button
+              type="button"
+              className="about-btn"
+              onClick={() => setAboutOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={aboutOpen}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              <Info size={14} /> About
+            </button>
           </div>
+        </header>
 
-          <TreeWorkspace
-            type={treeType}
-            root={root}
-            onRoot={setRoot}
-            onHistory={setHistory}
-            history={history}
-            session={sessionsByType[treeType]}
-            onSessionChange={updateCurrentSession}
-          />
-        </section>
+        {activeTab === "learn" ? (
+          <section id="panel-learn" role="tabpanel" aria-labelledby="switch-learn" className="learn-panel-shell">
+            <div className="learn-switcher-row">
+              <ConceptSwitcher tabs={tabs} activeTab={activeTab} onSwitchTab={switchTab} className="learn-switcher" />
+            </div>
+            <LearnPanel />
+          </section>
+        ) : (
+          <section
+            id={`panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`switch-${activeTab}`}
+            className="tree-panel"
+          >
+            <TreeWorkspace
+              type={treeType}
+              root={root}
+              onRoot={setRoot}
+              onHistory={setHistory}
+              history={history}
+              session={sessionsByType[treeType]}
+              onSessionChange={updateCurrentSession}
+              tabs={tabs}
+              activeTab={activeTab}
+              onSwitchTab={switchTab}
+            />
+          </section>
+        )}
+      </main>
+
+      {aboutOpen && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setAboutOpen(false)}>
+          <section
+            className="about-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="about-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="about-modal-title">About this playground</h2>
+            <p>
+              Explore BST, AVL, and Red-Black trees through interactive operations, traversal highlights, and replayable
+              structural timelines.
+            </p>
+            <button type="button" className="btn" onClick={() => setAboutOpen(false)}>Close</button>
+          </section>
+        </div>
       )}
-    </main>
+    </>
   );
 }
