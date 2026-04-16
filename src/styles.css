@@ -410,7 +410,9 @@ body::-webkit-scrollbar,
   flex-direction: column;
   gap: 10px;
   height: 100%;
-  overflow: hidden;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .replay-sidebar {
@@ -422,6 +424,7 @@ body::-webkit-scrollbar,
   gap: 10px;
   height: 100%;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -798,25 +801,48 @@ body::-webkit-scrollbar,
 }
 
 .history-list {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  margin-right: -2px;
+  scrollbar-gutter: stable;
 }
 
 .history-sidebar {
   margin-top: 0;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .timeline-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   height: 184px;
   min-height: 184px;
   max-height: 184px;
   overflow-y: auto;
+}
+
+.timeline-details {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.timeline-details::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .history-item {
