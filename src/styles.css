@@ -174,6 +174,10 @@ body {
   background: #fbfdff;
 }
 
+.toolbar-row.playback-row {
+  background: #f6fbff;
+}
+
 .toolbar-label {
   color: var(--muted);
   font-size: 0.78rem;
@@ -284,6 +288,22 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 560px;
+}
+
+.speed-label {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.speed-select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 0.76rem;
+  color: #2a4364;
+  background: #ffffff;
 }
 
 .metrics-row {

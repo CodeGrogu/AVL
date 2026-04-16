@@ -1,5 +1,11 @@
 import { bstDelete, bstInsert } from "./baseTree";
-import { avlDelete, avlInsert, avlRootBalance } from "./avlTree";
+import {
+  avlDelete,
+  avlDeleteTrace,
+  avlInsert,
+  avlInsertTrace,
+  avlRootBalance,
+} from "./avlTree";
 import { rbBlackHeight, rbDelete, rbInsert } from "./rbTree";
 
 export const TREE_CONFIG = {
@@ -11,6 +17,20 @@ export const TREE_CONFIG = {
     summary: "Simple ordered tree. Fast on average, but can degrade if unbalanced.",
     insert: bstInsert,
     remove: bstDelete,
+    traceInsert: (root, value) => {
+      const next = bstInsert(root, value);
+      return {
+        root: next,
+        frames: [{ root: next, label: `BST link update for ${value}`, focus: [value] }],
+      };
+    },
+    traceRemove: (root, value) => {
+      const next = bstDelete(root, value);
+      return {
+        root: next,
+        frames: [{ root: next, label: `BST link update for ${value}`, focus: [value] }],
+      };
+    },
     extraMetric: () => null,
   },
   AVL: {
@@ -21,6 +41,8 @@ export const TREE_CONFIG = {
     summary: "BST with strict height balancing using rotations.",
     insert: avlInsert,
     remove: avlDelete,
+    traceInsert: avlInsertTrace,
+    traceRemove: avlDeleteTrace,
     extraMetric: (root) => (root ? `Root BF: ${avlRootBalance(root) > 0 ? "+" : ""}${avlRootBalance(root)}` : null),
   },
   RB: {
@@ -31,6 +53,20 @@ export const TREE_CONFIG = {
     summary: "BST with color rules that guarantee logarithmic height.",
     insert: rbInsert,
     remove: rbDelete,
+    traceInsert: (root, value) => {
+      const next = rbInsert(root, value);
+      return {
+        root: next,
+        frames: [{ root: next, label: `Applied Red-Black fix-ups for ${value}`, focus: [value] }],
+      };
+    },
+    traceRemove: (root, value) => {
+      const next = rbDelete(root, value);
+      return {
+        root: next,
+        frames: [{ root: next, label: `Applied Red-Black fix-ups for ${value}`, focus: [value] }],
+      };
+    },
     extraMetric: (root) => (root ? `Black-height: ${rbBlackHeight(root)}` : null),
   },
 };
