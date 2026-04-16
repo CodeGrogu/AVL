@@ -1532,7 +1532,7 @@ body::-webkit-scrollbar,
 
 .chip:hover:not(:disabled) {
   transform: translateY(-2px) scale(1.05);
-  background: var(--blue-soft);
+  background: var(--info-soft);
   box-shadow: 0 4px 10px -4px rgba(59, 130, 246, 0.4);
 }
 
