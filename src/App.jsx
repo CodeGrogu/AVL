@@ -31,6 +31,31 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 const easeInOutQuad = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
 
+const FRAME_KIND_META = {
+  start: { label: "Start", tone: "neutral" },
+  visit: { label: "Search Path", tone: "neutral" },
+  insert: { label: "Insert", tone: "success" },
+  delete: { label: "Delete", tone: "danger" },
+  replace: { label: "Replace", tone: "case" },
+  case: { label: "Case", tone: "case" },
+  rotation: { label: "Rotation", tone: "rotation" },
+  "rotation-result": { label: "After Rotation", tone: "rotation" },
+  "color-flip": { label: "Color Flip", tone: "color" },
+  "color-flip-result": { label: "After Color Flip", tone: "color" },
+  "root-recolor": { label: "Root Recolor", tone: "color" },
+  step: { label: "Step", tone: "neutral" },
+  done: { label: "Complete", tone: "success" },
+};
+
+const getFrameKindMeta = (kind) => FRAME_KIND_META[kind] ?? { label: "Step", tone: "neutral" };
+
+const summarizeFrames = (frames, fallback) => {
+  for (let idx = frames.length - 1; idx >= 0; idx -= 1) {
+    if (frames[idx].explanation) return frames[idx].explanation;
+  }
+  return fallback;
+};
+
 const nodeSignature = (node) => {
   if (!node) return "#";
   return `${node.val}:${node.h ?? "-"}:${node.color ?? "-"}|${nodeSignature(node.left)}|${nodeSignature(node.right)}`;
@@ -53,13 +78,24 @@ const dedupeFrames = (frames) => {
 };
 
 const buildTimeline = ({ beforeRoot, path = [], traceFrames = [], afterRoot, actionLabel, value }) => {
-  const frames = [{ root: beforeRoot, label: `${actionLabel} start`, focus: [] }];
+  const valueLabel = value === undefined ? "" : ` ${value}`;
+  const frames = [
+    {
+      root: beforeRoot,
+      label: `${actionLabel} start`,
+      focus: [],
+      kind: "start",
+      explanation: `Start ${actionLabel.toLowerCase()}${valueLabel}.`,
+    },
+  ];
 
   for (const visited of path) {
     frames.push({
       root: beforeRoot,
       label: `Visit ${visited}`,
       focus: [visited],
+      kind: "visit",
+      explanation: `Traverse through node ${visited} while searching the modification path.`,
     });
   }
 
@@ -68,6 +104,8 @@ const buildTimeline = ({ beforeRoot, path = [], traceFrames = [], afterRoot, act
       root: trace.root,
       label: trace.label ?? `${actionLabel} step`,
       focus: trace.focus ?? [],
+      kind: trace.kind ?? "step",
+      explanation: trace.explanation ?? "",
     });
   }
 
@@ -75,6 +113,8 @@ const buildTimeline = ({ beforeRoot, path = [], traceFrames = [], afterRoot, act
     root: afterRoot,
     label: `${actionLabel} done${value !== undefined ? ` (${value})` : ""}`,
     focus: value !== undefined ? [value] : [],
+    kind: "done",
+    explanation: `${actionLabel} complete${valueLabel}.`,
   });
 
   return dedupeFrames(frames);
@@ -217,7 +257,6 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
   const [message, setMessage] = useState({ ok: true, text: "Preloaded with 11 nodes" });
   const [pathSet, setPathSet] = useState(new Set());
   const [foundValue, setFoundValue] = useState(null);
-
   const [traversal, setTraversal] = useState({ name: "", values: [], index: -1 });
 
   const [timelineState, setTimelineState] = useState({
@@ -226,6 +265,8 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
     playing: false,
   });
   const [timelineSpeed, setTimelineSpeed] = useState(1);
+  const [operationHistory, setOperationHistory] = useState([]);
+  const [selectedOperationId, setSelectedOperationId] = useState(null);
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -235,12 +276,40 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
   const traversalTimerRef = useRef(null);
   const previousLayoutRef = useRef(null);
   const transitionRafRef = useRef(null);
+  const operationIdRef = useRef(1);
 
   const [transitionState, setTransitionState] = useState(null);
 
   const timelineFrame = timelineState.frames[timelineState.index] ?? null;
   const visualRoot = timelineFrame?.root ?? root;
   const frameFocusSet = useMemo(() => new Set(timelineFrame?.focus ?? []), [timelineFrame]);
+  const frameFocusIndex = useMemo(() => {
+    const map = new Map();
+    (timelineFrame?.focus ?? []).forEach((value, idx) => {
+      if (!map.has(value)) map.set(value, idx);
+    });
+    return map;
+  }, [timelineFrame]);
+
+  const frameKindMeta = getFrameKindMeta(timelineFrame?.kind);
+  const frameExplanation =
+    timelineFrame?.explanation ||
+    (timelineState.frames.length
+      ? "No additional explanation provided for this frame."
+      : "Run an insert/delete operation to capture a replay timeline.");
+
+  const selectedOperation = useMemo(
+    () => operationHistory.find((entry) => entry.id === selectedOperationId) ?? null,
+    [operationHistory, selectedOperationId],
+  );
+
+  const replaySteps = useMemo(
+    () =>
+      timelineState.frames
+        .map((frame, index) => ({ frame, index }))
+        .filter(({ frame }) => frame.kind !== "visit"),
+    [timelineState.frames],
+  );
 
   const layoutOptions = useMemo(
     () => ({
@@ -358,6 +427,8 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
     setFoundValue(null);
     setTraversal({ name: "", values: [], index: -1 });
     setTimelineState({ frames: [], index: 0, playing: false });
+    setOperationHistory([]);
+    setSelectedOperationId(null);
   }, [type]);
 
   const animatedGraph = useMemo(() => {
@@ -365,6 +436,29 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
     if (!transitionState) return interpolateLayout(currentLayout, currentLayout, 1);
     return interpolateLayout(transitionState.from, transitionState.to, transitionState.progress);
   }, [currentLayout, transitionState]);
+
+  const animatedNodeMap = useMemo(() => {
+    const map = new Map();
+    for (const nodeMeta of animatedGraph?.nodes ?? []) {
+      map.set(nodeMeta.value, nodeMeta);
+    }
+    return map;
+  }, [animatedGraph]);
+
+  const focusEdgeKeys = useMemo(() => {
+    const focus = timelineFrame?.focus ?? [];
+    if (focus.length < 2) return new Set();
+    return new Set([`${focus[0]}->${focus[1]}`, `${focus[1]}->${focus[0]}`]);
+  }, [timelineFrame]);
+
+  const focusConnector = useMemo(() => {
+    const focus = timelineFrame?.focus ?? [];
+    if (focus.length < 2) return null;
+    const from = animatedNodeMap.get(focus[0]);
+    const to = animatedNodeMap.get(focus[1]);
+    if (!from || !to) return null;
+    return { from, to };
+  }, [timelineFrame, animatedNodeMap]);
 
   const currentTraversalValue =
     traversal.index >= 0 && traversal.index < traversal.values.length
@@ -405,6 +499,44 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
     });
   };
 
+  const registerOperation = ({ title, summary, frames }) => {
+    const id = `op-${Date.now()}-${operationIdRef.current}`;
+    operationIdRef.current += 1;
+
+    const timeLabel = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const entry = { id, title, summary, frames, timeLabel };
+
+    setOperationHistory((prev) => [entry, ...prev].slice(0, 30));
+    setSelectedOperationId(id);
+    startTimeline(frames, true);
+  };
+
+  const loadOperation = (id, autoplay = false) => {
+    const entry = operationHistory.find((candidate) => candidate.id === id);
+    if (!entry) return;
+
+    stopTraversal();
+    clearSearch();
+    setSelectedOperationId(entry.id);
+    setTimelineState({
+      frames: entry.frames,
+      index: 0,
+      playing: autoplay && entry.frames.length > 1,
+    });
+    setOk(`Loaded replay: ${entry.title}`);
+  };
+
+  const jumpToFrame = (index) => {
+    setTimelineState((prev) => {
+      if (!prev.frames.length) return prev;
+      return {
+        ...prev,
+        playing: false,
+        index: clamp(index, 0, prev.frames.length - 1),
+      };
+    });
+  };
+
   const parseInput = () => {
     const value = Number.parseInt(input, 10);
     return Number.isNaN(value) ? null : value;
@@ -427,16 +559,21 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
     onRoot(afterRoot);
     onHistory((prev) => [...prev, value]);
 
+    const actionLabel = random ? "Random insert" : "Insert";
     const frames = buildTimeline({
       beforeRoot,
       path,
       traceFrames: trace.frames,
       afterRoot,
-      actionLabel: random ? "Random insert" : "Insert",
+      actionLabel,
       value,
     });
 
-    startTimeline(frames, true);
+    registerOperation({
+      title: `${actionLabel} ${value}`,
+      summary: summarizeFrames(frames, `Inserted ${value}.`),
+      frames,
+    });
 
     setOk(`${random ? "Randomly inserted" : "Inserted"} ${value}.`);
     return true;
@@ -478,7 +615,12 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
       value,
     });
 
-    startTimeline(frames, true);
+    registerOperation({
+      title: `Delete ${value}`,
+      summary: summarizeFrames(frames, `Deleted ${value}.`),
+      frames,
+    });
+
     setOk(`Deleted ${value}.`);
     setInput("");
   };
@@ -521,14 +663,18 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
     const frames = buildTimeline({
       beforeRoot: root,
       path: [],
-      traceFrames: [{ root: null, label: "Cleared tree", focus: [] }],
+      traceFrames: [{ root: null, label: "Cleared tree", focus: [], kind: "delete", explanation: "All nodes removed." }],
       afterRoot: null,
       actionLabel: "Clear",
     });
 
     onRoot(null);
     onHistory([]);
-    startTimeline(frames, true);
+    registerOperation({
+      title: "Clear tree",
+      summary: "All nodes removed from the tree.",
+      frames,
+    });
     setOk("Tree cleared.");
   };
 
@@ -699,9 +845,46 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
 
         <span className="sequence-readout">
           {timelineHasFrames
-            ? `Frame ${timelineState.index + 1}/${timelineState.frames.length} · ${timelineFrame?.label ?? ""}`
+            ? `Frame ${timelineState.index + 1}/${timelineState.frames.length} | ${timelineFrame?.label ?? ""}`
             : "No modification timeline yet."}
         </span>
+      </div>
+
+      <div className="timeline-inspector">
+        <div className="timeline-topline">
+          <span className={`frame-kind-badge tone-${frameKindMeta.tone}`}>{frameKindMeta.label}</span>
+          <span className="frame-title">{timelineFrame?.label ?? "Awaiting first operation..."}</span>
+        </div>
+        <p className="frame-explanation">{frameExplanation}</p>
+        {timelineFrame?.focus?.length > 0 && (
+          <span className="focus-readout">Focus nodes: {timelineFrame.focus.join(" -> ")}</span>
+        )}
+
+        <div className="timeline-slider-row">
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, timelineState.frames.length - 1)}
+            value={timelineState.frames.length ? timelineState.index : 0}
+            onChange={(event) => jumpToFrame(Number(event.target.value))}
+            disabled={!timelineHasFrames}
+          />
+        </div>
+
+        {replaySteps.length > 0 && (
+          <div className="step-chip-row">
+            {replaySteps.map(({ frame, index }) => (
+              <button
+                key={`${frame.label}-${index}`}
+                type="button"
+                className={`step-chip ${timelineState.index === index ? "active" : ""}`}
+                onClick={() => jumpToFrame(index)}
+              >
+                {index + 1}. {frame.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="toolbar-row secondary">
@@ -721,7 +904,8 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
 
         {traversal.values.length > 0 && (
           <span className="sequence-readout">
-            {traversal.name}: {traversal.values.map((value, idx) => (idx === traversal.index ? `[${value}]` : value)).join(", ")}
+            {traversal.name}:{" "}
+            {traversal.values.map((value, idx) => (idx === traversal.index ? `[${value}]` : value)).join(", ")}
           </span>
         )}
       </div>
@@ -779,6 +963,7 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
               const distance = Math.hypot(dx, dy);
               const nx = dx / distance;
               const ny = dy / distance;
+              const isFocusEdge = focusEdgeKeys.has(edge.key);
 
               return (
                 <line
@@ -787,18 +972,40 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
                   y1={edge.from.y + ny * NODE_RADIUS}
                   x2={edge.to.x - nx * NODE_RADIUS}
                   y2={edge.to.y - ny * NODE_RADIUS}
-                  className="tree-edge"
+                  className={`tree-edge ${isFocusEdge ? `tone-${frameKindMeta.tone}` : ""}`}
+                  strokeWidth={isFocusEdge ? 2.7 : 1.5}
                   opacity={edge.opacity}
                 />
               );
             })}
 
+            {focusConnector && (
+              <line
+                x1={focusConnector.from.x}
+                y1={focusConnector.from.y}
+                x2={focusConnector.to.x}
+                y2={focusConnector.to.y}
+                className={`focus-link tone-${frameKindMeta.tone}`}
+              />
+            )}
+
             {animatedGraph?.nodes.map((nodeMeta) => {
               const palette = getNodePalette(nodeMeta);
               const bf = type === "AVL" ? (nodeMeta.node.left?.h ?? 0) - (nodeMeta.node.right?.h ?? 0) : null;
+              const focusIdx = frameFocusIndex.get(nodeMeta.value);
 
               return (
                 <g key={nodeMeta.value} opacity={nodeMeta.opacity}>
+                  {frameFocusSet.has(nodeMeta.value) && (
+                    <circle
+                      cx={nodeMeta.x}
+                      cy={nodeMeta.y}
+                      r={focusIdx === 0 ? NODE_RADIUS + 9 : NODE_RADIUS + 7}
+                      fill="none"
+                      className={`focus-ring tone-${frameKindMeta.tone}`}
+                    />
+                  )}
+
                   {currentTraversalValue === nodeMeta.value && (
                     <circle
                       cx={nodeMeta.x}
@@ -849,6 +1056,40 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
             })}
           </g>
         </svg>
+      </div>
+
+      <div className="history-panel">
+        <div className="history-header">
+          <span>Operation History</span>
+          <span>{operationHistory.length} recorded</span>
+          <button
+            type="button"
+            className="history-replay-btn"
+            onClick={() => selectedOperation && loadOperation(selectedOperation.id, true)}
+            disabled={!selectedOperation}
+          >
+            Replay selected
+          </button>
+        </div>
+
+        {operationHistory.length === 0 ? (
+          <p className="history-empty">Insert or delete nodes to build a replayable history.</p>
+        ) : (
+          <div className="history-list">
+            {operationHistory.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                className={`history-item ${selectedOperationId === entry.id ? "active" : ""}`}
+                onClick={() => loadOperation(entry.id, false)}
+              >
+                <span className="history-item-title">{entry.title}</span>
+                <span className="history-item-meta">{entry.timeLabel} | {entry.frames.length} frames</span>
+                <span className="history-item-summary">{entry.summary}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="legend-row">

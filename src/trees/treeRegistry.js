@@ -6,7 +6,13 @@ import {
   avlInsertTrace,
   avlRootBalance,
 } from "./avlTree";
-import { rbBlackHeight, rbDelete, rbInsert } from "./rbTree";
+import {
+  rbBlackHeight,
+  rbDelete,
+  rbDeleteTrace,
+  rbInsert,
+  rbInsertTrace,
+} from "./rbTree";
 
 export const TREE_CONFIG = {
   BST: {
@@ -21,14 +27,30 @@ export const TREE_CONFIG = {
       const next = bstInsert(root, value);
       return {
         root: next,
-        frames: [{ root: next, label: `BST link update for ${value}`, focus: [value] }],
+        frames: [
+          {
+            root: next,
+            label: `BST link update for ${value}`,
+            focus: [value],
+            kind: "insert",
+            explanation: "BST insertion updates links only; no balancing rotations are applied.",
+          },
+        ],
       };
     },
     traceRemove: (root, value) => {
       const next = bstDelete(root, value);
       return {
         root: next,
-        frames: [{ root: next, label: `BST link update for ${value}`, focus: [value] }],
+        frames: [
+          {
+            root: next,
+            label: `BST link update for ${value}`,
+            focus: [value],
+            kind: "delete",
+            explanation: "BST deletion rewires local links but does not rebalance tree height.",
+          },
+        ],
       };
     },
     extraMetric: () => null,
@@ -53,20 +75,8 @@ export const TREE_CONFIG = {
     summary: "BST with color rules that guarantee logarithmic height.",
     insert: rbInsert,
     remove: rbDelete,
-    traceInsert: (root, value) => {
-      const next = rbInsert(root, value);
-      return {
-        root: next,
-        frames: [{ root: next, label: `Applied Red-Black fix-ups for ${value}`, focus: [value] }],
-      };
-    },
-    traceRemove: (root, value) => {
-      const next = rbDelete(root, value);
-      return {
-        root: next,
-        frames: [{ root: next, label: `Applied Red-Black fix-ups for ${value}`, focus: [value] }],
-      };
-    },
+    traceInsert: rbInsertTrace,
+    traceRemove: rbDeleteTrace,
     extraMetric: (root) => (root ? `Black-height: ${rbBlackHeight(root)}` : null),
   },
 };
