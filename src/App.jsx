@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildTree,
   inOrder,
-  inOrderValues,
   layoutTree,
   levelOrder,
   postOrder,
@@ -19,6 +18,8 @@ import { TREE_CONFIG, TREE_TYPE_ORDER, TAB_TO_TYPE, TYPE_TO_TAB } from "./trees/
 
 const INITIAL_VALUES = [50, 30, 70, 20, 40, 60, 80, 10, 35, 55, 75];
 const NODE_RADIUS = 24;
+const STORAGE_KEY = "modular-tree-lab:v1";
+const STORAGE_VERSION = 1;
 
 const TRAVERSALS = [
   { key: "pre", label: "Pre-order", run: (root) => preOrder(root) },
@@ -28,6 +29,135 @@ const TRAVERSALS = [
 ];
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const getHistorySignature = (values) => values.join("|");
+
+const cloneFrame = (frame) => ({
+  ...frame,
+  focus: Array.isArray(frame.focus) ? [...frame.focus] : [],
+});
+
+const cloneOperation = (operation) => ({
+  ...operation,
+  frames: Array.isArray(operation.frames) ? operation.frames.map(cloneFrame) : [],
+});
+
+const createEmptySession = () => ({
+  operationHistory: [],
+  selectedOperationId: null,
+  timelineState: { frames: [], index: 0, playing: false },
+  timelineSpeed: 1,
+  zoom: 1,
+  pan: { x: 0, y: 0 },
+  historySignature: "",
+});
+
+const sanitizePersistedSession = (candidate) => {
+  const fallback = createEmptySession();
+  if (!candidate || typeof candidate !== "object") return fallback;
+
+  const operationHistory = Array.isArray(candidate.operationHistory)
+    ? candidate.operationHistory
+        .filter((entry) => entry && typeof entry === "object")
+        .map(cloneOperation)
+    : [];
+
+  const timelineFrames = Array.isArray(candidate.timelineState?.frames)
+    ? candidate.timelineState.frames.map(cloneFrame)
+    : [];
+
+  const timelineMax = Math.max(0, timelineFrames.length - 1);
+  const timelineIndex = Number.isFinite(candidate.timelineState?.index)
+    ? clamp(Math.trunc(candidate.timelineState.index), 0, timelineMax)
+    : 0;
+
+  const selectedOperationId =
+    typeof candidate.selectedOperationId === "string" &&
+    operationHistory.some((entry) => entry.id === candidate.selectedOperationId)
+      ? candidate.selectedOperationId
+      : operationHistory[0]?.id ?? null;
+
+  const panX = Number.isFinite(candidate.pan?.x) ? candidate.pan.x : 0;
+  const panY = Number.isFinite(candidate.pan?.y) ? candidate.pan.y : 0;
+
+  return {
+    operationHistory,
+    selectedOperationId,
+    timelineState: {
+      frames: timelineFrames,
+      index: timelineIndex,
+      playing: false,
+    },
+    timelineSpeed: Number.isFinite(candidate.timelineSpeed)
+      ? clamp(candidate.timelineSpeed, 0.5, 3)
+      : 1,
+    zoom: Number.isFinite(candidate.zoom) ? clamp(candidate.zoom, 0.1, 4) : 1,
+    pan: { x: panX, y: panY },
+    historySignature: typeof candidate.historySignature === "string" ? candidate.historySignature : "",
+  };
+};
+
+const createDefaultStorage = () => ({
+  version: STORAGE_VERSION,
+  app: {
+    activeTab: "learn",
+    treeType: "BST",
+    history: [...INITIAL_VALUES],
+  },
+  sessionsByType: TREE_TYPE_ORDER.reduce((acc, type) => {
+    acc[type] = createEmptySession();
+    return acc;
+  }, {}),
+});
+
+const sanitizeHistory = (candidate) => {
+  if (!Array.isArray(candidate)) return [...INITIAL_VALUES];
+
+  const parsed = candidate
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isInteger(value));
+
+  if (!parsed.length) return [];
+  return [...new Set(parsed)];
+};
+
+const readPersistedState = () => {
+  if (typeof window === "undefined") return createDefaultStorage();
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return createDefaultStorage();
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return createDefaultStorage();
+
+    const treeType = TREE_CONFIG[parsed.app?.treeType] ? parsed.app.treeType : "BST";
+    const activeTab = parsed.app?.activeTab === "learn" ? "learn" : TYPE_TO_TAB[treeType];
+    const history = sanitizeHistory(parsed.app?.history);
+
+    const sessionsByType = TREE_TYPE_ORDER.reduce((acc, type) => {
+      acc[type] = sanitizePersistedSession(parsed.sessionsByType?.[type]);
+      return acc;
+    }, {});
+
+    return {
+      version: STORAGE_VERSION,
+      app: { activeTab, treeType, history },
+      sessionsByType,
+    };
+  } catch {
+    return createDefaultStorage();
+  }
+};
+
+const writePersistedState = (nextState) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+  } catch {
+    // Ignore write failures (e.g. private mode quota restrictions).
+  }
+};
 
 const easeInOutQuad = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
 
@@ -250,7 +380,7 @@ function LearnPanel() {
   );
 }
 
-function TreeWorkspace({ type, root, onRoot, onHistory }) {
+function TreeWorkspace({ type, root, onRoot, onHistory, history, session, onSessionChange }) {
   const config = TREE_CONFIG[type];
 
   const [input, setInput] = useState("");
@@ -277,6 +407,9 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
   const previousLayoutRef = useRef(null);
   const transitionRafRef = useRef(null);
   const operationIdRef = useRef(1);
+  const hasTypeInitializedRef = useRef(false);
+  const restoredTypeRef = useRef(null);
+  const historySignature = useMemo(() => getHistorySignature(history), [history]);
 
   const [transitionState, setTransitionState] = useState(null);
 
@@ -423,13 +556,148 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
   }, [currentLayout, timelineSpeed]);
 
   useEffect(() => {
-    setPathSet(new Set());
-    setFoundValue(null);
-    setTraversal({ name: "", values: [], index: -1 });
-    setTimelineState({ frames: [], index: 0, playing: false });
-    setOperationHistory([]);
-    setSelectedOperationId(null);
+    const resetTransientStates = () => {
+      if (traversalTimerRef.current) {
+        clearInterval(traversalTimerRef.current);
+        traversalTimerRef.current = null;
+      }
+
+      previousLayoutRef.current = null;
+      setTransitionState(null);
+      setPathSet(new Set());
+      setFoundValue(null);
+      setTraversal({ name: "", values: [], index: -1 });
+    };
+
+    const buildSeedSession = () => {
+      const replayValues = [...history];
+      if (!replayValues.length) {
+        return {
+          ...createEmptySession(),
+          historySignature,
+        };
+      }
+
+      const targetConfig = TREE_CONFIG[type];
+      let replayRoot = null;
+      const replayFrames = [];
+
+      replayValues.forEach((value, index) => {
+        const path = searchPath(replayRoot, value).path;
+        const trace = targetConfig.traceInsert(replayRoot, value);
+        const frames = buildTimeline({
+          beforeRoot: replayRoot,
+          path,
+          traceFrames: trace.frames,
+          afterRoot: trace.root,
+          actionLabel: `Reinsert #${index + 1}`,
+          value,
+        });
+
+        replayFrames.push(...frames);
+        replayRoot = trace.root;
+      });
+
+      const frames = dedupeFrames(replayFrames);
+      const id = `seed-${Date.now()}-${type.toLowerCase()}`;
+
+      return {
+        operationHistory: [
+          {
+            id,
+            title: `Reinsert ${replayValues.length} values (${targetConfig.shortLabel})`,
+            summary: `Replayed ${replayValues.length} existing inserts to rebuild ${targetConfig.title}.`,
+            frames,
+            timeLabel: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            }),
+          },
+        ],
+        selectedOperationId: id,
+        timelineState: {
+          frames,
+          index: 0,
+          playing: false,
+        },
+        timelineSpeed: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        historySignature,
+      };
+    };
+
+    const applySession = (nextSession) => {
+      const normalized = sanitizePersistedSession(nextSession);
+      setOperationHistory(normalized.operationHistory);
+      setSelectedOperationId(normalized.selectedOperationId);
+      setTimelineState(normalized.timelineState);
+      setTimelineSpeed(normalized.timelineSpeed);
+      setZoom(normalized.zoom);
+      setPan(normalized.pan);
+    };
+
+    const initializeForType = () => {
+      resetTransientStates();
+
+      const normalized = sanitizePersistedSession(session);
+      const canRestore =
+        normalized.operationHistory.length > 0 &&
+        normalized.timelineState.frames.length > 0 &&
+        normalized.historySignature === historySignature;
+
+      if (canRestore) {
+        applySession(normalized);
+        restoredTypeRef.current = type;
+        setMessage({ ok: true, text: `Restored ${config.shortLabel} timeline state.` });
+        return;
+      }
+
+      const seed = buildSeedSession();
+      applySession(seed);
+      restoredTypeRef.current = type;
+
+      if (!history.length) {
+        setMessage({ ok: true, text: `${config.shortLabel} is empty.` });
+      } else {
+        setMessage({ ok: true, text: `Loaded ${history.length} values into ${config.shortLabel}.` });
+      }
+    };
+
+    if (!hasTypeInitializedRef.current) {
+      initializeForType();
+      hasTypeInitializedRef.current = true;
+      return;
+    }
+
+    initializeForType();
   }, [type]);
+
+  useEffect(() => {
+    if (!hasTypeInitializedRef.current) return;
+    if (restoredTypeRef.current !== type) return;
+
+    const timelineMax = Math.max(0, timelineState.frames.length - 1);
+    const safeIndex = clamp(timelineState.index, 0, timelineMax);
+    const safeSelectedOperationId = operationHistory.some((entry) => entry.id === selectedOperationId)
+      ? selectedOperationId
+      : operationHistory[0]?.id ?? null;
+
+    onSessionChange({
+      operationHistory: operationHistory.map(cloneOperation),
+      selectedOperationId: safeSelectedOperationId,
+      timelineState: {
+        frames: timelineState.frames.map(cloneFrame),
+        index: safeIndex,
+        playing: false,
+      },
+      timelineSpeed,
+      zoom,
+      pan,
+      historySignature,
+    });
+  }, [type, operationHistory, selectedOperationId, timelineState, timelineSpeed, zoom, pan, historySignature, onSessionChange]);
 
   const animatedGraph = useMemo(() => {
     if (!currentLayout) return null;
@@ -646,7 +914,7 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
   };
 
   const onRandomInsert = () => {
-    const allValues = new Set(inOrderValues(root));
+    const allValues = new Set(inOrder(root));
     if (allValues.size >= 199) return setError("All values from 1 to 199 already exist.");
 
     let value;
@@ -781,7 +1049,9 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
   return (
     <section className="workspace">
       <div className="toolbar-row">
+        <label htmlFor="tree-value-input" className="input-label">Value</label>
         <input
+          id="tree-value-input"
           value={input}
           type="number"
           placeholder="integer"
@@ -794,97 +1064,105 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
         <ActionButton variant="success" onClick={onInsert} disabled={isTimelinePlaying}>Insert</ActionButton>
         <ActionButton variant="danger" onClick={onDelete} disabled={isTimelinePlaying}>Delete</ActionButton>
         <ActionButton onClick={onSearch} disabled={isTimelinePlaying}>Search</ActionButton>
-        <ActionButton
-          onClick={() =>
-            treeMin(root) === null
-              ? setError("Tree is empty.")
-              : setOk(`Minimum: ${treeMin(root)}`)
-          }
-          disabled={isTimelinePlaying}
-        >
-          Min
-        </ActionButton>
-        <ActionButton
-          onClick={() =>
-            treeMax(root) === null
-              ? setError("Tree is empty.")
-              : setOk(`Maximum: ${treeMax(root)}`)
-          }
-          disabled={isTimelinePlaying}
-        >
-          Max
-        </ActionButton>
-        <ActionButton onClick={onRandomInsert} disabled={isTimelinePlaying}>Random</ActionButton>
         <ActionButton onClick={clearSearch}>Clear Highlight</ActionButton>
-        <ActionButton onClick={onClearAll} disabled={isTimelinePlaying}>Clear All</ActionButton>
+
+        <details className="secondary-actions">
+          <summary>More</summary>
+          <div className="secondary-actions-body">
+            <ActionButton
+              onClick={() =>
+                treeMin(root) === null
+                  ? setError("Tree is empty.")
+                  : setOk(`Minimum: ${treeMin(root)}`)
+              }
+              disabled={isTimelinePlaying}
+            >
+              Min
+            </ActionButton>
+            <ActionButton
+              onClick={() =>
+                treeMax(root) === null
+                  ? setError("Tree is empty.")
+                  : setOk(`Maximum: ${treeMax(root)}`)
+              }
+              disabled={isTimelinePlaying}
+            >
+              Max
+            </ActionButton>
+            <ActionButton onClick={onRandomInsert} disabled={isTimelinePlaying}>Random</ActionButton>
+            <ActionButton onClick={onClearAll} disabled={isTimelinePlaying}>Clear All</ActionButton>
+          </div>
+        </details>
 
         <span className={`status-pill ${message.ok ? "good" : "bad"}`}>{message.text}</span>
       </div>
 
-      <div className="toolbar-row playback-row">
-        <span className="toolbar-label">Modification Playback</span>
+      <div className="timeline-panel">
+        <div className="timeline-controls-row">
+          <span className="toolbar-label">Modification Playback</span>
 
-        <ActionButton onClick={timelineBack} disabled={!timelineHasFrames}>Prev</ActionButton>
-        <ActionButton onClick={toggleTimelinePlay} disabled={!timelineHasFrames}>
-          {timelineState.playing ? "Pause" : "Play"}
-        </ActionButton>
-        <ActionButton onClick={timelineNext} disabled={!timelineHasFrames}>Next</ActionButton>
-        <ActionButton onClick={replayTimeline} disabled={!timelineHasFrames}>Replay</ActionButton>
+          <ActionButton onClick={timelineBack} disabled={!timelineHasFrames}>Prev</ActionButton>
+          <ActionButton onClick={toggleTimelinePlay} disabled={!timelineHasFrames}>
+            {timelineState.playing ? "Pause" : "Play"}
+          </ActionButton>
+          <ActionButton onClick={timelineNext} disabled={!timelineHasFrames}>Next</ActionButton>
+          <ActionButton onClick={replayTimeline} disabled={!timelineHasFrames}>Replay</ActionButton>
 
-        <label className="speed-label" htmlFor="timeline-speed">Speed</label>
-        <select
-          id="timeline-speed"
-          value={timelineSpeed}
-          onChange={(event) => setTimelineSpeed(Number(event.target.value))}
-          className="speed-select"
-        >
-          {[0.5, 0.75, 1, 1.25, 1.5, 2, 3].map((speed) => (
-            <option key={speed} value={speed}>{speed}x</option>
-          ))}
-        </select>
-
-        <span className="sequence-readout">
-          {timelineHasFrames
-            ? `Frame ${timelineState.index + 1}/${timelineState.frames.length} | ${timelineFrame?.label ?? ""}`
-            : "No modification timeline yet."}
-        </span>
-      </div>
-
-      <div className="timeline-inspector">
-        <div className="timeline-topline">
-          <span className={`frame-kind-badge tone-${frameKindMeta.tone}`}>{frameKindMeta.label}</span>
-          <span className="frame-title">{timelineFrame?.label ?? "Awaiting first operation..."}</span>
-        </div>
-        <p className="frame-explanation">{frameExplanation}</p>
-        {timelineFrame?.focus?.length > 0 && (
-          <span className="focus-readout">Focus nodes: {timelineFrame.focus.join(" -> ")}</span>
-        )}
-
-        <div className="timeline-slider-row">
-          <input
-            type="range"
-            min={0}
-            max={Math.max(0, timelineState.frames.length - 1)}
-            value={timelineState.frames.length ? timelineState.index : 0}
-            onChange={(event) => jumpToFrame(Number(event.target.value))}
-            disabled={!timelineHasFrames}
-          />
-        </div>
-
-        {replaySteps.length > 0 && (
-          <div className="step-chip-row">
-            {replaySteps.map(({ frame, index }) => (
-              <button
-                key={`${frame.label}-${index}`}
-                type="button"
-                className={`step-chip ${timelineState.index === index ? "active" : ""}`}
-                onClick={() => jumpToFrame(index)}
-              >
-                {index + 1}. {frame.label}
-              </button>
+          <label className="speed-label" htmlFor="timeline-speed">Speed</label>
+          <select
+            id="timeline-speed"
+            value={timelineSpeed}
+            onChange={(event) => setTimelineSpeed(Number(event.target.value))}
+            className="speed-select"
+          >
+            {[0.5, 0.75, 1, 1.25, 1.5, 2, 3].map((speed) => (
+              <option key={speed} value={speed}>{speed}x</option>
             ))}
+          </select>
+
+          <span className="sequence-readout">
+            {timelineHasFrames
+              ? `Frame ${timelineState.index + 1}/${timelineState.frames.length} | ${timelineFrame?.label ?? ""}`
+              : "No modification timeline yet."}
+          </span>
+        </div>
+
+        <div className="timeline-inspector compact">
+          <div className="timeline-topline">
+            <span className={`frame-kind-badge tone-${frameKindMeta.tone}`}>{frameKindMeta.label}</span>
+            <span className="frame-title">{timelineFrame?.label ?? "Awaiting first operation..."}</span>
           </div>
-        )}
+          <p className="frame-explanation">{frameExplanation}</p>
+          {timelineFrame?.focus?.length > 0 && (
+            <span className="focus-readout">Focus nodes: {timelineFrame.focus.join(" -> ")}</span>
+          )}
+
+          <div className="timeline-slider-row">
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, timelineState.frames.length - 1)}
+              value={timelineState.frames.length ? timelineState.index : 0}
+              onChange={(event) => jumpToFrame(Number(event.target.value))}
+              disabled={!timelineHasFrames}
+            />
+          </div>
+
+          {replaySteps.length > 0 && (
+            <div className="step-chip-row">
+              {replaySteps.map(({ frame, index }) => (
+                <button
+                  key={`${frame.label}-${index}`}
+                  type="button"
+                  className={`step-chip ${timelineState.index === index ? "active" : ""}`}
+                  onClick={() => jumpToFrame(index)}
+                >
+                  {index + 1}. {frame.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="toolbar-row secondary">
@@ -1110,16 +1388,42 @@ function TreeWorkspace({ type, root, onRoot, onHistory }) {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("learn");
-  const [treeType, setTreeType] = useState("BST");
-  const [root, setRoot] = useState(() => buildTree(INITIAL_VALUES, TREE_CONFIG.BST.insert));
-  const [history, setHistory] = useState(INITIAL_VALUES);
+  const persistedRef = useRef(readPersistedState());
+
+  const [activeTab, setActiveTab] = useState(persistedRef.current.app.activeTab);
+  const [treeType, setTreeType] = useState(persistedRef.current.app.treeType);
+  const [history, setHistory] = useState(persistedRef.current.app.history);
+  const [root, setRoot] = useState(() =>
+    buildTree(persistedRef.current.app.history, TREE_CONFIG[persistedRef.current.app.treeType].insert),
+  );
+  const [sessionsByType, setSessionsByType] = useState(persistedRef.current.sessionsByType);
+
+  useEffect(() => {
+    writePersistedState({
+      version: STORAGE_VERSION,
+      app: {
+        activeTab,
+        treeType,
+        history,
+      },
+      sessionsByType,
+    });
+  }, [activeTab, treeType, history, sessionsByType]);
+
+  const updateCurrentSession = useCallback(
+    (nextSession) => {
+      setSessionsByType((prev) => ({
+        ...prev,
+        [treeType]: sanitizePersistedSession(nextSession),
+      }));
+    },
+    [treeType],
+  );
 
   const convertTo = (nextType) => {
     if (nextType === treeType) return;
 
-    const sourceValues = nextType === "BST" ? history : inOrderValues(root);
-    const rebuiltRoot = buildTree(sourceValues, TREE_CONFIG[nextType].insert);
+    const rebuiltRoot = buildTree(history, TREE_CONFIG[nextType].insert);
 
     setRoot(rebuiltRoot);
     setTreeType(nextType);
@@ -1145,13 +1449,17 @@ export default function App() {
         </p>
       </header>
 
-      <nav className="tabs-row" aria-label="Tree view tabs">
+      <nav className="tabs-row" aria-label="Tree view tabs" role="tablist">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
             onClick={() => switchTab(tab.key)}
             className={`tab-btn ${activeTab === tab.key ? "active" : ""}`}
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            aria-controls={`panel-${tab.key}`}
+            id={`tab-${tab.key}`}
           >
             {tab.label}
           </button>
@@ -1163,28 +1471,30 @@ export default function App() {
       </nav>
 
       {activeTab === "learn" ? (
-        <LearnPanel />
+        <section id="panel-learn" role="tabpanel" aria-labelledby="tab-learn">
+          <LearnPanel />
+        </section>
       ) : (
-        <section className="tree-panel">
+        <section
+          id={`panel-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`tab-${activeTab}`}
+          className="tree-panel"
+        >
           <div className="tree-panel-header">
             <span className="tree-title">Current type: {TREE_CONFIG[treeType].title}</span>
-
-            <div className="type-switch-row">
-              {TREE_TYPE_ORDER.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => convertTo(key)}
-                  className={`chip ${treeType === key ? "active" : ""}`}
-                  disabled={treeType === key}
-                >
-                  {TREE_CONFIG[key].shortLabel}
-                </button>
-              ))}
-            </div>
+            <span className="tree-subtitle">{TREE_CONFIG[treeType].summary}</span>
           </div>
 
-          <TreeWorkspace type={treeType} root={root} onRoot={setRoot} onHistory={setHistory} />
+          <TreeWorkspace
+            type={treeType}
+            root={root}
+            onRoot={setRoot}
+            onHistory={setHistory}
+            history={history}
+            session={sessionsByType[treeType]}
+            onSessionChange={updateCurrentSession}
+          />
         </section>
       )}
     </main>
