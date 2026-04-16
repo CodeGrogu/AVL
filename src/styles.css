@@ -897,6 +897,7 @@ body::-webkit-scrollbar,
   min-height: 0;
   padding: 0;
   background: linear-gradient(180deg, #fcfdff, #f5f9fd);
+  overscroll-behavior: none;
 }
 
 .canvas-overlay {
@@ -1089,6 +1090,7 @@ body::-webkit-scrollbar,
   border-radius: 0;
   border: 0;
   overflow: hidden;
+  overscroll-behavior: none;
   margin: 0;
 }
 

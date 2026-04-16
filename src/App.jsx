@@ -846,11 +846,26 @@ function TreeWorkspace({
 
     setPan((currentPan) =>
       snapPanPoint({
-        x: currentPan.x + event.deltaX,
-        y: currentPan.y + event.deltaY,
+        x: currentPan.x - event.deltaX,
+        y: currentPan.y - event.deltaY,
       }),
     );
   }, [snapPanPoint, snapZoomValue]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+
+    const onWheel = (event) => {
+      handleCanvasWheel(event);
+    };
+
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+
+    return () => {
+      canvas.removeEventListener("wheel", onWheel);
+    };
+  }, [handleCanvasWheel]);
 
   useEffect(() => {
     fitCanvas();
@@ -1695,7 +1710,6 @@ function TreeWorkspace({
                 dragRef.current.active = false;
                 setIsDragging(false);
               }}
-              onWheel={handleCanvasWheel}
             >
               <g
                 className={`canvas-zoom-layer ${isDragging || isResizing ? "dragging" : ""}`}
