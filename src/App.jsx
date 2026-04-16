@@ -745,7 +745,6 @@ function TreeWorkspace({
   const hasTypeInitializedRef = useRef(false);
   const restoredTypeRef = useRef(null);
   const speedMenuRef = useRef(null);
-  const sidebarStateRef = useRef({ leftOpen: true, rightOpen: true });
   const historySignature = useMemo(() => getHistorySignature(history), [history]);
 
   const [transitionState, setTransitionState] = useState(null);
