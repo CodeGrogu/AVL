@@ -750,6 +750,16 @@ function TreeWorkspace({
 
   const [transitionState, setTransitionState] = useState(null);
 
+  const snapZoomValue = useCallback((value) => {
+    const bounded = clamp(value, 0.1, 4);
+    return parseFloat((Math.round(bounded * 20) / 20).toFixed(2));
+  }, []);
+
+  const snapPanPoint = useCallback((point) => ({ x: Math.round(point.x), y: Math.round(point.y) }), []);
+
+  const renderedZoom = useMemo(() => snapZoomValue(zoom), [zoom, snapZoomValue]);
+  const renderedPan = useMemo(() => snapPanPoint(pan), [pan, snapPanPoint]);
+
   const timelineFrame = timelineState.frames[timelineState.index] ?? null;
   const visualRoot = timelineFrame?.root ?? root;
   const frameFocusSet = useMemo(() => new Set(timelineFrame?.focus ?? []), [timelineFrame]);
@@ -791,16 +801,16 @@ function TreeWorkspace({
     const svgWidth = canvasRef.current.clientWidth || 760;
     const svgHeight = canvasRef.current.clientHeight || 540;
 
-    const nextZoom = parseFloat(
-      Math.min(1.45, (svgWidth - 24) / currentLayout.width, (svgHeight - 24) / currentLayout.height).toFixed(3),
+    const nextZoom = snapZoomValue(
+      Math.min(1.45, (svgWidth - 24) / currentLayout.width, (svgHeight - 24) / currentLayout.height),
     );
 
     setZoom(nextZoom);
-    setPan({
+    setPan(snapPanPoint({
       x: Math.max(0, (svgWidth - currentLayout.width * nextZoom) / 2),
       y: Math.max(14, (svgHeight - currentLayout.height * nextZoom) / 2),
-    });
-  }, [currentLayout]);
+    }));
+  }, [currentLayout, snapPanPoint, snapZoomValue]);
 
   useEffect(() => {
     fitCanvas();
@@ -866,9 +876,7 @@ function TreeWorkspace({
 
     const onWheel = (event) => {
       event.preventDefault();
-      setZoom((current) =>
-        parseFloat(Math.max(0.1, Math.min(4, current * (event.deltaY < 0 ? 1.12 : 0.9))).toFixed(3)),
-      );
+      setZoom((current) => snapZoomValue(current * (event.deltaY < 0 ? 1.12 : 0.9)));
     };
 
     svg.addEventListener("wheel", onWheel, { passive: false });
@@ -1609,15 +1617,15 @@ function TreeWorkspace({
           <div className="zoom-controls vertical" role="group" aria-label="Zoom controls">
             <button
               type="button"
-              onClick={() => setZoom((value) => parseFloat(Math.min(4, value * 1.2).toFixed(3)))}
+              onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
               aria-label="Zoom in"
             >
               <ZoomIn size={14} className="btn-icon" />
             </button>
-            <span>{Math.round(zoom * 100)}%</span>
+            <span>{Math.round(renderedZoom * 100)}%</span>
             <button
               type="button"
-              onClick={() => setZoom((value) => parseFloat(Math.max(0.1, value / 1.2).toFixed(3)))}
+              onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
               aria-label="Zoom out"
             >
               <ZoomOut size={14} className="btn-icon" />
@@ -1662,13 +1670,16 @@ function TreeWorkspace({
               }}
               onWheel={(event) => {
                 if (event.deltaY < 0) {
-                  setZoom((value) => parseFloat(Math.min(4, value * 1.1).toFixed(3)));
+                  setZoom((value) => snapZoomValue(value * 1.1));
                 } else {
-                  setZoom((value) => parseFloat(Math.max(0.1, value / 1.1).toFixed(3)));
+                  setZoom((value) => snapZoomValue(value / 1.1));
                 }
               }}
             >
-              <g className={`canvas-zoom-layer ${isDragging || isResizing ? "dragging" : ""}`} transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
+              <g
+                className={`canvas-zoom-layer ${isDragging || isResizing ? "dragging" : ""}`}
+                transform={`translate(${renderedPan.x},${renderedPan.y}) scale(${renderedZoom})`}
+              >
                 {animatedGraph?.edges.map((edge) => {
                   const dx = edge.to.x - edge.from.x;
                   const dy = edge.to.y - edge.from.y;
@@ -1830,8 +1841,8 @@ function TreeWorkspace({
               pathSet={pathSet}
               foundValue={foundValue}
               traversal={traversal}
-              pan={pan}
-              zoom={zoom}
+              pan={renderedPan}
+              zoom={renderedZoom}
               canvasRef={canvasRef}
             />
           </div>
