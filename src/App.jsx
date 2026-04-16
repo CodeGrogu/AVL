@@ -420,52 +420,6 @@ function LegendDot({ fill, stroke, label }) {
   );
 }
 
-function NodeTooltip({ meta, frame, isFocused, type }) {
-  if (!meta) return null;
-
-  const isViolation = type === "AVL" && meta.bf !== null ? Math.abs(meta.bf) > 1 : false;
-
-  return (
-    <div
-      className={`node-tooltip ${isFocused ? "focused-tooltip" : ""} ${isViolation ? "violation-tooltip" : ""}`}
-      style={{
-        left: meta.x,
-        top: meta.y - 14,
-      }}
-    >
-      <div className="tooltip-header" style={{ borderColor: meta.palette.stroke }}>
-        <span className="tooltip-val" style={{ color: meta.palette.stroke }}>Node {meta.value}</span>
-        {type === "AVL" && meta.bf !== null && (
-          <span className={`tooltip-badge ${Math.abs(meta.bf) > 1 ? "bad" : "good"}`}>
-            BF: {meta.bf > 0 ? `+${meta.bf}` : meta.bf}
-          </span>
-        )}
-        {type === "RB" && (
-          <span className={`tooltip-badge ${meta.node.color === "R" ? "red-badge" : "black-badge"}`}>
-            {meta.node.color === "R" ? "Red" : "Black"}
-          </span>
-        )}
-      </div>
-
-      <div className="tooltip-metrics">
-        {type === "AVL" && <span>Height: {meta.node.h}</span>}
-      </div>
-
-      {(isFocused || isViolation) && (
-        <div className="tooltip-explanation">
-          {isFocused && frame?.explanation ? (
-            <p className="explanation-text"><strong>Current Action:</strong> {frame.explanation}</p>
-          ) : isViolation ? (
-            <p className="explanation-text warning">
-              <strong>Threshold Exceeded:</strong> Balance factor (|BF| {">"} 1) violated. Requires restructuring.
-            </p>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function LearnPanel() {
   const cards = [
     {
@@ -628,7 +582,6 @@ function TreeWorkspace({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [hoverMeta, setHoverMeta] = useState(null);
 
   const dragRef = useRef({ active: false, startX: 0, startY: 0, panX: 0, panY: 0 });
   const canvasRef = useRef(null);
@@ -1505,7 +1458,6 @@ function TreeWorkspace({
                   panY: pan.y,
                 };
                 setIsDragging(true);
-                setHoverMeta(null);
               }}
               onMouseMove={(event) => {
                 if (!dragRef.current.active) return;
@@ -1569,27 +1521,7 @@ function TreeWorkspace({
                   const focusIdx = frameFocusIndex.get(nodeMeta.value);
 
                   return (
-                    <g 
-                      key={nodeMeta.value} 
-                      opacity={nodeMeta.opacity}
-                      onMouseEnter={(e) => {
-                        if (isDragging || isResizing) return;
-                        setHoverMeta({
-                          value: nodeMeta.value,
-                          node: nodeMeta.node,
-                          bf,
-                          palette,
-                          x: e.clientX,
-                          y: e.clientY,
-                        });
-                      }}
-                      onMouseMove={(e) => {
-                        if (isDragging || isResizing) return;
-                        setHoverMeta(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
-                      }}
-                      onMouseLeave={() => setHoverMeta(null)}
-                      style={{ cursor: "pointer", pointerEvents: "all" }}
-                    >
+                    <g key={nodeMeta.value} opacity={nodeMeta.opacity}>
                       {frameFocusSet.has(nodeMeta.value) && (
                         <circle
                           cx={nodeMeta.x}
