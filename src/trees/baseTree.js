@@ -27,6 +27,18 @@ export const treeSize = (root) => (!root ? 0 : 1 + treeSize(root.left) + treeSiz
 
 export const treeHeight = (root) => (!root ? 0 : 1 + Math.max(treeHeight(root.left), treeHeight(root.right)));
 
+export const treeLeavesCount = (root) => {
+  if (!root) return 0;
+  if (!root.left && !root.right) return 1;
+  return treeLeavesCount(root.left) + treeLeavesCount(root.right);
+};
+
+export const treeInternalNodesCount = (root) => {
+  if (!root) return 0;
+  if (!root.left && !root.right) return 0;
+  return 1 + treeInternalNodesCount(root.left) + treeInternalNodesCount(root.right);
+};
+
 export const searchPath = (root, value) => {
   const path = [];
   let node = root;
@@ -122,7 +134,8 @@ export const inOrderValues = (root) => inOrder(root, []);
 
 export const buildTree = (values, insertFn) => values.reduce((acc, value) => insertFn(acc, value), null);
 
-const slotCount = (node) => (!node ? 1 : !node.left && !node.right ? 1 : slotCount(node.left) + slotCount(node.right));
+const slotCount = (node) =>
+  !node ? 1 : !node.left && !node.right ? 1 : slotCount(node.left) + slotCount(node.right);
 
 export const layoutTree = (
   root,
@@ -135,28 +148,39 @@ export const layoutTree = (
 ) => {
   if (!root) return null;
 
+  const nodeMap = new Map();
+  const edges = [];
   let maxDepth = 0;
-  const setDepth = (node, depth) => {
+  const place = (node, startSlot, depth) => {
     if (!node) return;
-    node._depth = depth;
     maxDepth = Math.max(maxDepth, depth);
-    setDepth(node.left, depth + 1);
-    setDepth(node.right, depth + 1);
-  };
-  setDepth(root, 0);
-
-  const place = (node, startSlot) => {
-    if (!node) return;
     const widthSlots = slotCount(node);
-    node.cx = padding + (startSlot + widthSlots / 2) * horizontalSlot;
-    node.cy = padding + node._depth * (nodeRadius * 2 + verticalGap) + nodeRadius;
-    place(node.left, startSlot);
-    place(node.right, startSlot + slotCount(node.left));
+    const x = padding + (startSlot + widthSlots / 2) * horizontalSlot;
+    const y = padding + depth * (nodeRadius * 2 + verticalGap) + nodeRadius;
+
+    const nodeMeta = {
+      value: node.val,
+      node,
+      x,
+      y,
+      depth,
+    };
+
+    nodeMap.set(node.val, nodeMeta);
+
+    if (node.left) edges.push({ from: node.val, to: node.left.val, key: `${node.val}->${node.left.val}` });
+    if (node.right) edges.push({ from: node.val, to: node.right.val, key: `${node.val}->${node.right.val}` });
+
+    place(node.left, startSlot, depth + 1);
+    place(node.right, startSlot + slotCount(node.left), depth + 1);
   };
-  place(root, 0);
+  place(root, 0, 0);
 
   return {
     root,
+    nodeMap,
+    nodes: Array.from(nodeMap.values()),
+    edges,
     width: slotCount(root) * horizontalSlot + padding * 2,
     height: (maxDepth + 1) * (nodeRadius * 2 + verticalGap) - verticalGap + nodeRadius * 2 + padding * 2,
   };
