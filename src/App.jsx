@@ -543,6 +543,34 @@ function NodeTooltip({ hoveredNode, treeType, timelineFrame, frameFocusSet, path
   );
 }
 
+function TimelineSegmentTooltip({ hoveredSegment }) {
+  if (!hoveredSegment?.frame) return null;
+
+  const { frame, index, total, x, y } = hoveredSegment;
+  const kindMeta = getFrameKindMeta(frame.kind);
+
+  return (
+    <div
+      className="timeline-segment-tooltip"
+      style={{ left: `${x}px`, top: `${y}px` }}
+      role="tooltip"
+      aria-hidden="true"
+    >
+      <div className="timeline-segment-tooltip-inner">
+        <div className="timeline-segment-tooltip-meta">
+          <span className={`frame-kind-badge tone-${kindMeta.tone}`}>{kindMeta.label}</span>
+          <span className="timeline-segment-step">Frame {index + 1}/{total}</span>
+        </div>
+        <div className="timeline-segment-title">{frame.label}</div>
+        {frame.focus?.length > 0 && (
+          <div className="timeline-segment-focus">Focus: {frame.focus.join(" -> ")}</div>
+        )}
+        {frame.explanation && <p className="timeline-segment-body">{frame.explanation}</p>}
+      </div>
+    </div>
+  );
+}
+
 function LearnPanel() {
   const cards = [
     {
@@ -706,6 +734,7 @@ function TreeWorkspace({
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [hoveredNode, setHoveredNode] = useState(null);
+  const [hoveredTimelineSegment, setHoveredTimelineSegment] = useState(null);
 
   const dragRef = useRef({ active: false, startX: 0, startY: 0, panX: 0, panY: 0 });
   const canvasRef = useRef(null);
@@ -1088,6 +1117,35 @@ function TreeWorkspace({
 
   const setOk = (text) => setMessage({ ok: true, text });
   const setError = (text) => setMessage({ ok: false, text });
+
+  const showTimelineSegmentTooltip = useCallback(
+    ({ frame, index, clientX, clientY }) => {
+      const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+      const tooltipHalfWidth = 176;
+      const safeX = viewportWidth
+        ? clamp(clientX, tooltipHalfWidth, Math.max(tooltipHalfWidth, viewportWidth - tooltipHalfWidth))
+        : clientX;
+
+      setHoveredTimelineSegment({
+        frame,
+        index,
+        total: timelineState.frames.length,
+        x: safeX,
+        y: clientY - 8,
+      });
+    },
+    [timelineState.frames.length],
+  );
+
+  const hideTimelineSegmentTooltip = useCallback(() => {
+    setHoveredTimelineSegment(null);
+  }, []);
+
+  useEffect(() => {
+    if (!timelineState.frames.length) {
+      setHoveredTimelineSegment(null);
+    }
+  }, [timelineState.frames.length]);
 
   const clearSearch = () => {
     setPathSet(new Set());
@@ -1802,6 +1860,33 @@ function TreeWorkspace({
                         index === timelineState.index ? "active" : index < timelineState.index ? "past" : ""
                       }`}
                       onClick={() => jumpToFrame(index)}
+                      onMouseEnter={(event) =>
+                        showTimelineSegmentTooltip({
+                          frame,
+                          index,
+                          clientX: event.clientX,
+                          clientY: event.clientY,
+                        })
+                      }
+                      onMouseMove={(event) =>
+                        showTimelineSegmentTooltip({
+                          frame,
+                          index,
+                          clientX: event.clientX,
+                          clientY: event.clientY,
+                        })
+                      }
+                      onMouseLeave={hideTimelineSegmentTooltip}
+                      onFocus={(event) => {
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        showTimelineSegmentTooltip({
+                          frame,
+                          index,
+                          clientX: rect.left + rect.width / 2,
+                          clientY: rect.top,
+                        });
+                      }}
+                      onBlur={hideTimelineSegmentTooltip}
                       aria-label={`Go to frame ${index + 1}: ${frame.label}`}
                       title={`Frame ${index + 1}: ${frame.label}`}
                     />
@@ -1811,6 +1896,8 @@ function TreeWorkspace({
                 )}
               </div>
             </div>
+
+            <TimelineSegmentTooltip hoveredSegment={hoveredTimelineSegment} />
 
             <div className="playback-controls-row">
               <ActionButton onClick={timelineBack} disabled={!timelineHasFrames} icon={SkipBack}>Prev</ActionButton>
