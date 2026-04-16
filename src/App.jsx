@@ -1960,10 +1960,10 @@ function TreeWorkspace({
               <span className={`frame-kind-badge tone-${frameKindMeta.tone}`}>{frameKindMeta.label}</span>
               <span className="frame-title">{timelineFrame?.label ?? "Awaiting first operation..."}</span>
             </div>
-            <p className="frame-explanation">{frameExplanation}</p>
             {timelineFrame?.focus?.length > 0 && (
               <span className="focus-readout">Focus nodes: {timelineFrame.focus.join(" -> ")}</span>
             )}
+            <p className="frame-explanation">{frameExplanation}</p>
           </section>
 
           <section className="sidebar-section history-sidebar" id="operation-history-list">
