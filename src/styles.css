@@ -37,6 +37,25 @@ body {
   overflow: hidden;
 }
 
+html,
+body,
+#root,
+.app-shell,
+.learn-container {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#root::-webkit-scrollbar,
+.app-shell::-webkit-scrollbar,
+.learn-container::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 #root {
   height: 100vh;
   padding: 0;
@@ -425,43 +444,23 @@ body {
 .control-sidebar,
 .history-list,
 .legend-popover {
-  scrollbar-width: thin;
-  scrollbar-color: #9db4cd #edf3fa;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .control-sidebar::-webkit-scrollbar,
 .history-list::-webkit-scrollbar,
 .legend-popover::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.control-sidebar::-webkit-scrollbar-track,
-.history-list::-webkit-scrollbar-track,
-.legend-popover::-webkit-scrollbar-track {
-  background: #edf3fa;
-  border-radius: 999px;
-}
-
-.control-sidebar::-webkit-scrollbar-thumb,
-.history-list::-webkit-scrollbar-thumb,
-.legend-popover::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #b7cce2, #9db4cd);
-  border-radius: 999px;
-  border: 2px solid #edf3fa;
-}
-
-.control-sidebar::-webkit-scrollbar-thumb:hover,
-.history-list::-webkit-scrollbar-thumb:hover,
-.legend-popover::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #9fbad4, #87a3bf);
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .sidebar-head {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: linear-gradient(160deg, #fcfeff, #f5faff);
+  background: transparent;
   padding-bottom: 6px;
 }
 
