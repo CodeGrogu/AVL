@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildTree,
   inOrder,
-  inOrderValues,
   layoutTree,
   levelOrder,
   postOrder,
@@ -585,8 +584,7 @@ export default function App() {
   const convertTo = (nextType) => {
     if (nextType === treeType) return;
 
-    const sourceValues = nextType === "BST" ? history : inOrderValues(root);
-    const rebuiltRoot = buildTree(sourceValues, TREE_CONFIG[nextType].insert);
+    const rebuiltRoot = buildTree(history, TREE_CONFIG[nextType].insert);
 
     setRoot(rebuiltRoot);
     setTreeType(nextType);
