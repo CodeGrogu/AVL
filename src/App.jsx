@@ -409,14 +409,137 @@ function ActionButton({ children, onClick, variant = "neutral", disabled = false
   );
 }
 
-function LegendDot({ fill, stroke, label }) {
+function LegendDot({ fill, stroke, label, ring }) {
   return (
     <span className="legend-dot-wrap">
-      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-        <circle cx="6" cy="6" r="5" fill={fill} stroke={stroke} strokeWidth="1.2" />
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+        {ring ? (
+          <>
+            <circle cx="7" cy="7" r="5" fill={fill || "none"} stroke={stroke} strokeWidth="1.2" />
+            <circle cx="7" cy="7" r="6.5" fill="none" stroke={ring} strokeWidth="1.4" strokeDasharray="3 2" />
+          </>
+        ) : (
+          <circle cx="7" cy="7" r="5" fill={fill} stroke={stroke} strokeWidth="1.2" />
+        )}
       </svg>
       {label}
     </span>
+  );
+}
+
+// Rich context-aware tooltip for hovered tree nodes
+function NodeTooltip({ hoveredNode, treeType, timelineFrame, frameFocusSet, pathSet, foundValue, traversal, pan, zoom, canvasRef }) {
+  if (!hoveredNode || !canvasRef?.current) return null;
+
+  const { value, node, x, y } = hoveredNode;
+  const svgRect = canvasRef.current.getBoundingClientRect();
+
+  const screenX = svgRect.left + pan.x + x * zoom;
+  const screenY = svgRect.top + pan.y + y * zoom;
+
+  const lines = [];
+
+  lines.push({ tag: "title", text: `Node ${value}` });
+
+  if (treeType === "AVL") {
+    const leftH = node.left?.h ?? 0;
+    const rightH = node.right?.h ?? 0;
+    const bf = leftH - rightH;
+    lines.push({ tag: "stat", label: "Height", text: `${node.h ?? "?"}` });
+    lines.push({ tag: "stat", label: "Balance factor", text: `${bf > 0 ? "+" : ""}${bf}` });
+    if (Math.abs(bf) >= 2) {
+      lines.push({ tag: "alert", text: `Imbalanced (|bf|=${Math.abs(bf)}). A rotation is needed to restore AVL invariants.` });
+    } else if (Math.abs(bf) === 1) {
+      lines.push({ tag: "info", text: "Slightly leaning but within AVL tolerance." });
+    } else {
+      lines.push({ tag: "info", text: "Perfectly balanced at this subtree." });
+    }
+  }
+
+  if (treeType === "RB") {
+    const colorName = node.color === "R" ? "Red" : "Black";
+    lines.push({ tag: "stat", label: "Color", text: colorName });
+    if (node.color === "R") {
+      lines.push({ tag: "info", text: "Red nodes represent temporary 3/4-node configurations in a 2-3 tree mapping." });
+    } else {
+      lines.push({ tag: "info", text: "Black nodes contribute to the black-height invariant ensuring O(log n) performance." });
+    }
+  }
+
+  const children = [node.left ? `L:${node.left.val}` : null, node.right ? `R:${node.right.val}` : null].filter(Boolean);
+  lines.push({ tag: "stat", label: "Children", text: children.length ? children.join(", ") : "None (leaf)" });
+
+  const frame = timelineFrame;
+  if (frame) {
+    const isFocused = frameFocusSet.has(value);
+    const kind = frame.kind;
+    const kindMeta = FRAME_KIND_META[kind] ?? { label: "Step", tone: "neutral" };
+
+    if (isFocused) {
+      if (kind === "rotation" || kind === "rotation-result") {
+        const focusArr = frame.focus ?? [];
+        if (focusArr[0] === value) {
+          lines.push({ tag: "highlight", text: `Rotation pivot: this node is the center of the current ${kindMeta.label.toLowerCase()} operation.` });
+        } else {
+          lines.push({ tag: "highlight", text: `Participating in a ${kindMeta.label.toLowerCase()}. This node is being repositioned in the subtree.` });
+        }
+      } else if (kind === "color-flip" || kind === "color-flip-result") {
+        lines.push({ tag: "highlight", text: "This node's color is being flipped as part of a Red-Black rebalancing step." });
+      } else if (kind === "root-recolor") {
+        lines.push({ tag: "highlight", text: "The root is being recolored to black to maintain the Red-Black invariant." });
+      } else if (kind === "case") {
+        lines.push({ tag: "highlight", text: "Imbalance case detected here. The algorithm is deciding which rotation pattern to apply." });
+      } else if (kind === "insert") {
+        lines.push({ tag: "highlight", text: "This node was just inserted into the tree." });
+      } else if (kind === "delete" || kind === "replace") {
+        lines.push({ tag: "highlight", text: "This node is involved in the current deletion/replacement step." });
+      } else if (kind === "visit") {
+        lines.push({ tag: "highlight", text: "The search path is currently visiting this node." });
+      } else {
+        lines.push({ tag: "highlight", text: `Currently focused during: ${kindMeta.label}.` });
+      }
+
+      if (frame.explanation) {
+        lines.push({ tag: "explain", text: frame.explanation });
+      }
+    }
+  }
+
+  if (foundValue === value) {
+    lines.push({ tag: "highlight", text: "Search hit: this is the node matching the search query." });
+  } else if (pathSet.has(value)) {
+    lines.push({ tag: "info", text: "This node is on the search path traversed to find the target." });
+  }
+
+  if (traversal.name) {
+    const tIdx = traversal.values.indexOf(value);
+    if (tIdx === traversal.index) {
+      lines.push({ tag: "highlight", text: `${traversal.name} traversal is currently visiting this node (position ${tIdx + 1}/${traversal.values.length}).` });
+    } else if (tIdx >= 0 && tIdx < traversal.index) {
+      lines.push({ tag: "info", text: `Already visited in ${traversal.name} (position ${tIdx + 1}).` });
+    }
+  }
+
+  return (
+    <div
+      className="node-tooltip"
+      style={{
+        position: "fixed",
+        left: `${screenX}px`,
+        top: `${screenY - NODE_RADIUS * zoom - 12}px`,
+      }}
+    >
+      <div className="node-tooltip-inner">
+        {lines.map((line, i) => {
+          if (line.tag === "title") return <div key={i} className="ntt-title">{line.text}</div>;
+          if (line.tag === "stat") return <div key={i} className="ntt-stat"><span className="ntt-stat-label">{line.label}</span><span className="ntt-stat-value">{line.text}</span></div>;
+          if (line.tag === "alert") return <div key={i} className="ntt-alert">{line.text}</div>;
+          if (line.tag === "highlight") return <div key={i} className="ntt-highlight">{line.text}</div>;
+          if (line.tag === "explain") return <div key={i} className="ntt-explain">{line.text}</div>;
+          return <div key={i} className="ntt-info">{line.text}</div>;
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -582,6 +705,7 @@ function TreeWorkspace({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [hoveredNode, setHoveredNode] = useState(null);
 
   const dragRef = useRef({ active: false, startX: 0, startY: 0, panX: 0, panY: 0 });
   const canvasRef = useRef(null);
@@ -1368,15 +1492,24 @@ function TreeWorkspace({
              <div className="section-heading-row" style={{ marginBottom: "6px" }}>
               <h2>Legend</h2>
             </div>
-            <div className="legend-list" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div className="legend-list" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <span className="legend-group-label">Node Colors</span>
               {typeLegend.map((entry) => (
                 <LegendDot key={entry.label} fill={entry.fill} stroke={entry.stroke} label={entry.label} />
               ))}
+
+              <span className="legend-group-label" style={{ marginTop: "6px" }}>Search / Traversal</span>
               <LegendDot fill="#FDE68A" stroke="#B45309" label="Search path" />
               <LegendDot fill="#FACC15" stroke="#A16207" label="Search hit" />
               <LegendDot fill="#C7D2FE" stroke="#4338CA" label="Traversal visited" />
               <LegendDot fill="#818CF8" stroke="#3730A3" label="Traversal current" />
-              <LegendDot fill="#BAE6FD" stroke="#0369A1" label="Timeline focus" />
+
+              <span className="legend-group-label" style={{ marginTop: "6px" }}>Timeline Highlights</span>
+              <LegendDot fill="#dbeafe" stroke="#1d4ed8" ring="#2563eb" label="Rotation focus" />
+              <LegendDot fill="#ede9fe" stroke="#6d28d9" ring="#7c3aed" label="Case detection" />
+              <LegendDot fill="#fee2e2" stroke="#b91c1c" ring="#dc2626" label="Color flip / recolor" />
+              <LegendDot fill="#dcfce7" stroke="#065f46" ring="#16a34a" label="Insert / complete" />
+              <LegendDot fill="#fef3c7" stroke="#92400e" ring="#d97706" label="Delete / replace" />
             </div>
           </section>
         </aside>
@@ -1519,15 +1652,47 @@ function TreeWorkspace({
                   const palette = getNodePalette(nodeMeta);
                   const bf = type === "AVL" ? (nodeMeta.node.left?.h ?? 0) - (nodeMeta.node.right?.h ?? 0) : null;
                   const focusIdx = frameFocusIndex.get(nodeMeta.value);
+                  const isFocused = frameFocusSet.has(nodeMeta.value);
+                  const isPrimary = focusIdx === 0;
+                  const kind = timelineFrame?.kind;
+
+                  // Determine ring color per frame kind for more accurate highlighting
+                  const ringColor = isFocused ? (
+                    kind === "rotation" || kind === "rotation-result" ? "#2563eb" :
+                    kind === "case" ? "#7c3aed" :
+                    kind === "color-flip" || kind === "color-flip-result" ? "#dc2626" :
+                    kind === "root-recolor" ? "#dc2626" :
+                    kind === "insert" ? "#16a34a" :
+                    kind === "delete" || kind === "replace" ? "#d97706" :
+                    kind === "visit" ? "#64748b" :
+                    kind === "done" ? "#16a34a" :
+                    "#64748b"
+                  ) : null;
 
                   return (
                     <g key={nodeMeta.value} opacity={nodeMeta.opacity}>
-                      {frameFocusSet.has(nodeMeta.value) && (
+                      {/* Outer glow halo for PRIMARY focused node */}
+                      {isFocused && isPrimary && (
                         <circle
                           cx={nodeMeta.x}
                           cy={nodeMeta.y}
-                          r={focusIdx === 0 ? NODE_RADIUS + 9 : NODE_RADIUS + 7}
+                          r={NODE_RADIUS + 14}
                           fill="none"
+                          stroke={ringColor}
+                          strokeWidth="1.2"
+                          opacity="0.3"
+                          className="focus-halo"
+                        />
+                      )}
+
+                      {/* Main focus ring */}
+                      {isFocused && (
+                        <circle
+                          cx={nodeMeta.x}
+                          cy={nodeMeta.y}
+                          r={isPrimary ? NODE_RADIUS + 9 : NODE_RADIUS + 7}
+                          fill="none"
+                          stroke={ringColor}
                           className={`focus-ring tone-${frameKindMeta.tone}`}
                         />
                       )}
@@ -1578,11 +1743,44 @@ function TreeWorkspace({
                           {bf}
                         </text>
                       )}
+
+                      {/* Invisible larger hit-area for hover */}
+                      <circle
+                        cx={nodeMeta.x}
+                        cy={nodeMeta.y}
+                        r={NODE_RADIUS + 6}
+                        fill="transparent"
+                        stroke="none"
+                        style={{ cursor: "pointer" }}
+                        onMouseEnter={() => {
+                          if (isDragging) return;
+                          setHoveredNode({
+                            value: nodeMeta.value,
+                            node: nodeMeta.node,
+                            x: nodeMeta.x,
+                            y: nodeMeta.y,
+                          });
+                        }}
+                        onMouseLeave={() => setHoveredNode(null)}
+                      />
                     </g>
                   );
                 })}
               </g>
             </svg>
+
+            <NodeTooltip
+              hoveredNode={hoveredNode}
+              treeType={type}
+              timelineFrame={timelineFrame}
+              frameFocusSet={frameFocusSet}
+              pathSet={pathSet}
+              foundValue={foundValue}
+              traversal={traversal}
+              pan={pan}
+              zoom={zoom}
+              canvasRef={canvasRef}
+            />
           </div>
 
           <div className="playback-dock" role="group" aria-label="Timeline playback controls">

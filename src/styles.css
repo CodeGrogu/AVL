@@ -1103,33 +1103,61 @@ body {
 }
 
 .focus-ring {
-  stroke-width: 2.2;
+  stroke-width: 2.4;
   stroke-dasharray: 4 3;
   opacity: 0.9;
 }
 
 .focus-ring.tone-neutral {
   stroke: #64748b;
+  filter: drop-shadow(0 0 3px rgba(100, 116, 139, 0.4));
 }
 
 .focus-ring.tone-case {
-  stroke: #6d28d9;
+  stroke: #7c3aed;
+  filter: drop-shadow(0 0 5px rgba(124, 58, 237, 0.5));
 }
 
 .focus-ring.tone-rotation {
-  stroke: #1d4ed8;
+  stroke: #2563eb;
+  filter: drop-shadow(0 0 6px rgba(37, 99, 235, 0.5));
 }
 
 .focus-ring.tone-color {
   stroke: #dc2626;
+  filter: drop-shadow(0 0 6px rgba(220, 38, 38, 0.5));
 }
 
 .focus-ring.tone-success {
-  stroke: #15803d;
+  stroke: #16a34a;
+  filter: drop-shadow(0 0 5px rgba(22, 163, 74, 0.45));
 }
 
 .focus-ring.tone-danger {
-  stroke: #b45309;
+  stroke: #d97706;
+  filter: drop-shadow(0 0 5px rgba(217, 119, 6, 0.5));
+}
+
+/* Outer glow halo for primary focused node */
+.focus-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: halo-breathe 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes halo-breathe {
+  0%, 100% { opacity: 0.15; r: calc(var(--node-r, 24) + 14); }
+  50% { opacity: 0.4; r: calc(var(--node-r, 24) + 18); }
+}
+
+/* Legend group labels */
+.legend-group-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
 }
 
 .node-label {
@@ -1456,6 +1484,131 @@ body {
   background: #3b82f6;
 }
 
+/* --- Node Tooltip --- */
+.node-tooltip {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  animation: tooltip-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes tooltip-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -90%) scale(0.92);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+    filter: blur(0);
+  }
+}
+
+.node-tooltip-inner {
+  max-width: 300px;
+  min-width: 180px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(206, 221, 239, 0.7);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow:
+    0 8px 32px -8px rgba(18, 35, 63, 0.18),
+    0 2px 8px -2px rgba(18, 35, 63, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: #3b5576;
+}
+
+.node-tooltip-inner::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.88);
+  border-right: 1px solid rgba(206, 221, 239, 0.7);
+  border-bottom: 1px solid rgba(206, 221, 239, 0.7);
+  backdrop-filter: blur(16px);
+}
+
+.ntt-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #0f2942;
+  letter-spacing: -0.01em;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.4);
+  padding-bottom: 5px;
+  margin-bottom: 2px;
+}
+
+.ntt-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.ntt-stat-label {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ntt-stat-value {
+  color: #1e3a5f;
+  font-weight: 700;
+  font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  font-size: 0.78rem;
+}
+
+.ntt-info {
+  color: #4b6a8a;
+  font-style: italic;
+  font-size: 0.72rem;
+  opacity: 0.9;
+}
+
+.ntt-alert {
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 0.74rem;
+  padding: 4px 8px;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: 6px;
+  border-left: 3px solid #ef4444;
+}
+
+.ntt-highlight {
+  color: #1d4ed8;
+  font-weight: 600;
+  font-size: 0.73rem;
+  padding: 4px 8px;
+  background: rgba(59, 130, 246, 0.06);
+  border-radius: 6px;
+  border-left: 3px solid #3b82f6;
+}
+
+.ntt-explain {
+  color: #334155;
+  font-size: 0.72rem;
+  padding: 5px 8px;
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 6px;
+  border-left: 3px solid #94a3b8;
+  line-height: 1.5;
+}
 .switcher-btn:focus-visible,
 .btn:focus-visible,
 .chip:focus-visible,
