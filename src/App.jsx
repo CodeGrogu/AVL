@@ -291,8 +291,8 @@ const interpolateLayout = (fromLayout, toLayout, progress) => {
     nodeMap.set(id, meta);
   }
 
-  const getUndirected = (u, v) => (u < v ? `${u}-${v}` : `${v}-${u}`);
-  const parseUndirected = (key) => key.split("-").map(Number);
+  const getUndirected = (u, v) => JSON.stringify(u < v ? [u, v] : [v, u]);
+  const parseUndirected = (key) => JSON.parse(key);
 
   const fromUndirected = new Map();
   for (const edge of fromLayout?.edges ?? []) {
