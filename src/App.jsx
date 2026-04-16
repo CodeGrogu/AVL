@@ -811,6 +811,47 @@ function TreeWorkspace({
     }));
   }, [currentLayout, snapPanPoint, snapZoomValue]);
 
+  const handleCanvasWheel = useCallback((event) => {
+    event.preventDefault();
+
+    const isPinchGesture = event.ctrlKey || event.metaKey;
+
+    if (isPinchGesture) {
+      const svg = canvasRef.current;
+      if (!svg) return;
+
+      const rect = svg.getBoundingClientRect();
+      const pointerX = event.clientX - rect.left;
+      const pointerY = event.clientY - rect.top;
+
+      setZoom((currentZoom) => {
+        const zoomFactor = event.deltaY < 0 ? 1.08 : 0.92;
+        const nextZoom = snapZoomValue(currentZoom * zoomFactor);
+
+        setPan((currentPan) => {
+          const worldX = (pointerX - currentPan.x) / currentZoom;
+          const worldY = (pointerY - currentPan.y) / currentZoom;
+
+          return snapPanPoint({
+            x: pointerX - worldX * nextZoom,
+            y: pointerY - worldY * nextZoom,
+          });
+        });
+
+        return nextZoom;
+      });
+
+      return;
+    }
+
+    setPan((currentPan) =>
+      snapPanPoint({
+        x: currentPan.x + event.deltaX,
+        y: currentPan.y + event.deltaY,
+      }),
+    );
+  }, [snapPanPoint, snapZoomValue]);
+
   useEffect(() => {
     fitCanvas();
   }, [fitCanvas]);
@@ -868,19 +909,6 @@ function TreeWorkspace({
     },
     [],
   );
-
-  useEffect(() => {
-    const svg = canvasRef.current;
-    if (!svg) return undefined;
-
-    const onWheel = (event) => {
-      event.preventDefault();
-      setZoom((current) => snapZoomValue(current * (event.deltaY < 0 ? 1.12 : 0.9)));
-    };
-
-    svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
-  }, []);
 
   useEffect(() => {
     if (!timelineState.playing) return;
@@ -1667,13 +1695,7 @@ function TreeWorkspace({
                 dragRef.current.active = false;
                 setIsDragging(false);
               }}
-              onWheel={(event) => {
-                if (event.deltaY < 0) {
-                  setZoom((value) => snapZoomValue(value * 1.1));
-                } else {
-                  setZoom((value) => snapZoomValue(value / 1.1));
-                }
-              }}
+              onWheel={handleCanvasWheel}
             >
               <g
                 className={`canvas-zoom-layer ${isDragging || isResizing ? "dragging" : ""}`}
