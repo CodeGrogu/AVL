@@ -767,7 +767,7 @@ body::-webkit-scrollbar,
 }
 
 .frame-explanation {
-  margin: 2px 0 0;
+  margin: auto 0 0;
   color: #445b79;
   font-size: 0.75rem;
   line-height: 1.43;
@@ -911,6 +911,7 @@ body::-webkit-scrollbar,
   display: inline-flex;
   align-items: center;
   gap: var(--overlay-gap);
+  max-width: calc(100% - (var(--overlay-margin) * 2) - var(--top-overlay-height) - var(--overlay-gap));
 }
 
 .stats-overlay {
@@ -930,6 +931,7 @@ body::-webkit-scrollbar,
   overflow-y: hidden;
   scrollbar-width: none;
   backdrop-filter: blur(5px);
+  max-width: 100%;
 }
 
 .stats-overlay::-webkit-scrollbar {
@@ -1778,18 +1780,31 @@ body::-webkit-scrollbar,
     padding: 14px;
   }
 
+  .app-header-row {
+    gap: 8px;
+  }
+
+  .app-header-main {
+    gap: 8px;
+  }
+
   .app-header h1 {
     font-size: 1.18rem;
+  }
+
+  .app-header-switcher .switcher-btn {
+    padding-inline: 8px;
+    font-size: 0.72rem;
+  }
+
+  .about-btn {
+    padding: 6px 10px;
+    font-size: 0.72rem;
   }
 
   .learn-grid {
     grid-template-columns: 1fr;
     grid-template-rows: repeat(4, minmax(0, 1fr));
-  }
-
-  .concept-switcher {
-    width: 100%;
-    justify-content: space-between;
   }
 
   .switcher-btn {
@@ -1803,7 +1818,7 @@ body::-webkit-scrollbar,
   }
 
   .stats-overlay-group {
-    max-width: calc(100% - (var(--overlay-margin) * 2));
+    max-width: calc(100% - (var(--overlay-margin) * 2) - var(--top-overlay-height) - var(--overlay-gap));
   }
 
   .stats-overlay {
