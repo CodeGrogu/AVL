@@ -262,27 +262,27 @@ export const avlInsertTrace = (root, value) => {
 export const avlDeleteTrace = (root, value) => {
   const frames = [];
 
-  const remove = (node, trail) => {
+  const remove = (node, trail, target) => {
     if (!node) return null;
 
-    if (value < node.val) {
-      const left = remove(node.left, [...trail, { node, dir: "left" }]);
+    if (target < node.val) {
+      const left = remove(node.left, [...trail, { node, dir: "left" }], target);
       const rebalanced = rebalanceWithTrace({ ...node, left }, trail, frames);
       return rebalanced;
     }
 
-    if (value > node.val) {
-      const right = remove(node.right, [...trail, { node, dir: "right" }]);
+    if (target > node.val) {
+      const right = remove(node.right, [...trail, { node, dir: "right" }], target);
       const rebalanced = rebalanceWithTrace({ ...node, right }, trail, frames);
       return rebalanced;
     }
 
     if (!node.left) {
       pushTraceFrame(frames, {
-        label: `Removed ${value}`,
+        label: `Removed ${target}`,
         root: rebuildFromTrail(node.right, trail),
-        focus: [value],
-        explanation: `Node ${value} removed. It had no left child, so its right subtree moved up.`,
+        focus: [target],
+        explanation: `Node ${target} removed. It had no left child, so its right subtree moved up.`,
         kind: "delete",
       });
       return node.right;
@@ -290,17 +290,21 @@ export const avlDeleteTrace = (root, value) => {
 
     if (!node.right) {
       pushTraceFrame(frames, {
-        label: `Removed ${value}`,
+        label: `Removed ${target}`,
         root: rebuildFromTrail(node.left, trail),
-        focus: [value],
-        explanation: `Node ${value} removed. It had no right child, so its left subtree moved up.`,
+        focus: [target],
+        explanation: `Node ${target} removed. It had no right child, so its left subtree moved up.`,
         kind: "delete",
       });
       return node.left;
     }
 
     const successor = minNode(node.right);
-    const replaced = { ...node, val: successor.val, right: remove(node.right, [...trail, { node, dir: "right" }]) };
+    const replaced = {
+      ...node,
+      val: successor.val,
+      right: remove(node.right, [...trail, { node, dir: "right" }], successor.val),
+    };
     pushTraceFrame(frames, {
       label: `Replace ${value} with successor ${successor.val}`,
       root: rebuildFromTrail(replaced, trail),
@@ -313,7 +317,7 @@ export const avlDeleteTrace = (root, value) => {
     return rebalanced;
   };
 
-  const nextRoot = remove(root, []);
+  const nextRoot = remove(root, [], value);
   pushTraceFrame(frames, {
     label: `Done deleting ${value}`,
     root: nextRoot,
