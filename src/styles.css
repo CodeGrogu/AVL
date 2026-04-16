@@ -1535,13 +1535,68 @@ body::-webkit-scrollbar,
 }
 
 .timeline-split {
-  transition: flex-grow 0.4s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease, transform 0.3s ease;
+  transition: background 0.3s ease, transform 0.24s ease, box-shadow 0.24s ease;
 }
 
 .timeline-split:hover {
-  flex-grow: 2;
-  transform: scaleY(1.6);
+  transform: translateY(-1px) scaleY(1.2);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
   background: #3b82f6;
+}
+
+.timeline-segment-tooltip {
+  position: fixed;
+  z-index: 210;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  animation: tooltip-enter 0.18s ease-out;
+}
+
+.timeline-segment-tooltip-inner {
+  width: min(340px, calc(100vw - 28px));
+  max-width: 340px;
+  border-radius: 12px;
+  border: 1px solid rgba(206, 221, 239, 0.8);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 32px -18px rgba(18, 35, 63, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.timeline-segment-tooltip-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.timeline-segment-step {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #60758f;
+}
+
+.timeline-segment-title {
+  color: #1b3553;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.timeline-segment-focus {
+  color: #526987;
+  font-size: 0.72rem;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.timeline-segment-body {
+  margin: 0;
+  color: #445b79;
+  font-size: 0.73rem;
+  line-height: 1.45;
 }
 
 /* --- Node Tooltip --- */
