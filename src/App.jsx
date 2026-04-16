@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Trash2, Search, Eraser, ArrowDownToLine, ArrowUpToLine, Dices, Trash,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
-  ChevronDown, ChevronRight, ZoomIn, ZoomOut, Maximize,
+  ChevronDown, ZoomIn, ZoomOut, Maximize,
   SkipBack, Play, Pause, SkipForward, RotateCcw, Info
 } from "lucide-react";
 import {
@@ -291,8 +291,8 @@ const interpolateLayout = (fromLayout, toLayout, progress) => {
     nodeMap.set(id, meta);
   }
 
-  const getUndirected = (u, v) => (u < v ? `${u}-${v}` : `${v}-${u}`);
-  const parseUndirected = (key) => key.split("-").map(Number);
+  const getUndirected = (u, v) => JSON.stringify(u < v ? [u, v] : [v, u]);
+  const parseUndirected = (key) => JSON.parse(key);
 
   const fromUndirected = new Map();
   for (const edge of fromLayout?.edges ?? []) {
@@ -745,7 +745,6 @@ function TreeWorkspace({
   const hasTypeInitializedRef = useRef(false);
   const restoredTypeRef = useRef(null);
   const speedMenuRef = useRef(null);
-  const sidebarStateRef = useRef({ leftOpen: true, rightOpen: true });
   const historySignature = useMemo(() => getHistorySignature(history), [history]);
 
   const [transitionState, setTransitionState] = useState(null);
