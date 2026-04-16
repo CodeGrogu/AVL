@@ -1513,7 +1513,7 @@ function TreeWorkspace({
               <ActionButton variant="success" onClick={onInsert} disabled={isTimelinePlaying} icon={Plus}>Insert</ActionButton>
               <ActionButton variant="danger" onClick={onDelete} disabled={isTimelinePlaying} icon={Trash2}>Delete</ActionButton>
               <ActionButton onClick={onSearch} disabled={isTimelinePlaying} icon={Search}>Search</ActionButton>
-              <ActionButton onClick={clearSearch} icon={Eraser}>Clear Highlight</ActionButton>
+              <ActionButton onClick={onClearAll} disabled={isTimelinePlaying} icon={Trash}>Clear All</ActionButton>
             </div>
 
             <details className="secondary-actions sidebar-secondary">
@@ -1542,7 +1542,7 @@ function TreeWorkspace({
                   Max
                 </ActionButton>
                 <ActionButton onClick={onRandomInsert} disabled={isTimelinePlaying} icon={Dices}>Random</ActionButton>
-                <ActionButton onClick={onClearAll} disabled={isTimelinePlaying} icon={Trash}>Clear All</ActionButton>
+                <ActionButton onClick={clearSearch} icon={Eraser}>Clear Highlight</ActionButton>
               </div>
             </details>
 
