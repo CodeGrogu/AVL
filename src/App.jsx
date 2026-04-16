@@ -1541,23 +1541,23 @@ function TreeWorkspace({
             )}
           </section>
 
-          <section className="sidebar-section legend-section" style={{ marginTop: "auto", borderTop: "1px dashed rgba(203, 213, 225, 0.6)", paddingTop: "12px", gap: "6px" }}>
-             <div className="section-heading-row" style={{ marginBottom: "6px" }}>
+          <section className="sidebar-section legend-section">
+             <div className="section-heading-row legend-heading-row">
               <h2>Legend</h2>
             </div>
-            <div className="legend-list" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div className="legend-list">
               <span className="legend-group-label">Node Colors</span>
               {typeLegend.map((entry) => (
                 <LegendDot key={entry.label} fill={entry.fill} stroke={entry.stroke} label={entry.label} />
               ))}
 
-              <span className="legend-group-label" style={{ marginTop: "6px" }}>Search / Traversal</span>
+              <span className="legend-group-label legend-group-separator">Search / Traversal</span>
               <LegendDot fill="#FDE68A" stroke="#B45309" label="Search path" />
               <LegendDot fill="#FACC15" stroke="#A16207" label="Search hit" />
               <LegendDot fill="#C7D2FE" stroke="#4338CA" label="Traversal visited" />
               <LegendDot fill="#818CF8" stroke="#3730A3" label="Traversal current" />
 
-              <span className="legend-group-label" style={{ marginTop: "6px" }}>Timeline Highlights</span>
+              <span className="legend-group-label legend-group-separator">Timeline Highlights</span>
               <LegendDot fill="#dbeafe" stroke="#1d4ed8" ring="#2563eb" label="Rotation focus" />
               <LegendDot fill="#ede9fe" stroke="#6d28d9" ring="#7c3aed" label="Case detection" />
               <LegendDot fill="#fee2e2" stroke="#b91c1c" ring="#dc2626" label="Color flip / recolor" />
