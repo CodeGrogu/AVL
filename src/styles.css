@@ -103,20 +103,42 @@ body::-webkit-scrollbar,
   gap: 12px;
 }
 
+.app-header-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 1.45rem;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.app-header-switcher-wrap {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.app-header-switcher {
+  justify-content: space-between;
 }
 
 .about-btn {
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 6px 14px;
+  height: 26px;
+  padding: 4px 12px;
   font-size: 0.78rem;
   font-weight: 700;
   color: #2d4666;
   background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
 }
 
@@ -128,22 +150,13 @@ body::-webkit-scrollbar,
   flex-direction: column;
 }
 
-.learn-switcher-row {
-  display: flex;
-  justify-content: flex-start;
-  margin: 0;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel-alt);
-}
-
 .concept-switcher {
   display: inline-flex;
   gap: 6px;
   padding: 6px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 999px;
-  background: var(--panel-alt);
+  background: transparent;
 }
 
 .switcher-btn {
