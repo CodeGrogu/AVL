@@ -707,9 +707,6 @@ function TreeWorkspace({
   history,
   session,
   onSessionChange,
-  tabs,
-  activeTab,
-  onSwitchTab,
 }) {
   const config = TREE_CONFIG[type];
 
@@ -1460,10 +1457,6 @@ function TreeWorkspace({
         }`.trim()}
       >
         <aside className={`control-sidebar ${leftSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Control panel">
-          <div className="sidebar-head">
-            <ConceptSwitcher tabs={tabs} activeTab={activeTab} onSwitchTab={onSwitchTab} className="sidebar-switcher" />
-          </div>
-
           <section className="sidebar-section">
             <div className="section-heading-row">
               <h2>Actions</h2>
