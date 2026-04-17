@@ -1757,8 +1757,9 @@ body::-webkit-scrollbar,
 
 .timeline-segment-tooltip {
   position: fixed;
-  z-index: 210;
+  z-index: 3000;
   pointer-events: none;
+  user-select: none;
   transform: translate(-50%, -100%);
   animation: tooltip-enter 0.18s ease-out;
 }
@@ -1813,8 +1814,9 @@ body::-webkit-scrollbar,
 /* --- Node Tooltip --- */
 .node-tooltip {
   position: fixed;
-  z-index: 200;
+  z-index: 3000;
   pointer-events: none;
+  user-select: none;
   transform: translate(-50%, -100%);
   animation: tooltip-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
