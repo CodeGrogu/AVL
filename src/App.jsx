@@ -1630,6 +1630,24 @@ function TreeWorkspace({
     runInsert(value, true);
   };
 
+  const onShowMin = () => {
+    const value = treeMin(root);
+    if (value === null) {
+      setError("Tree is empty.");
+      return;
+    }
+    setOk(`Minimum: ${value}`);
+  };
+
+  const onShowMax = () => {
+    const value = treeMax(root);
+    if (value === null) {
+      setError("Tree is empty.");
+      return;
+    }
+    setOk(`Maximum: ${value}`);
+  };
+
   const onClearAll = () => {
     clearSearch();
     stopTraversal();
