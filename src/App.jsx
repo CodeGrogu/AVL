@@ -2148,22 +2148,14 @@ function TreeWorkspace({
               <summary>More actions</summary>
               <div className="secondary-actions-body">
                 <ActionButton
-                  onClick={() =>
-                    treeMin(root) === null
-                      ? setError("Tree is empty.")
-                      : setOk(`Minimum: ${treeMin(root)}`)
-                  }
+                  onClick={onShowMin}
                   disabled={isTimelinePlaying}
                   icon={ArrowDownToLine}
                 >
                   Min
                 </ActionButton>
                 <ActionButton
-                  onClick={() =>
-                    treeMax(root) === null
-                      ? setError("Tree is empty.")
-                      : setOk(`Maximum: ${treeMax(root)}`)
-                  }
+                  onClick={onShowMax}
                   disabled={isTimelinePlaying}
                   icon={ArrowUpToLine}
                 >
@@ -2636,120 +2628,23 @@ function TreeWorkspace({
             />
           </div>
 
-          <div className="playback-dock" role="group" aria-label="Timeline playback controls">
-            <div className="timeline-slider-row">
-              <div
-                className="timeline-splits timeline-splits-track"
-                role="group"
-                aria-label="Timeline frame segments"
-                style={{
-                  gridTemplateColumns: `repeat(${Math.max(1, timelineState.frames.length)}, minmax(10px, 1fr))`,
-                }}
-              >
-                {timelineHasFrames ? (
-                  timelineState.frames.map((frame, index) => (
-                    <button
-                      key={`${frame.label}-${index}`}
-                      type="button"
-                      className={`timeline-split ${
-                        index === timelineState.index ? "active" : index < timelineState.index ? "past" : ""
-                      }`}
-                      onClick={() => jumpToFrame(index)}
-                      onMouseEnter={(event) =>
-                        showTimelineSegmentTooltip({
-                          frame,
-                          index,
-                          clientX: event.clientX,
-                          clientY: event.clientY,
-                        })
-                      }
-                      onMouseMove={(event) =>
-                        showTimelineSegmentTooltip({
-                          frame,
-                          index,
-                          clientX: event.clientX,
-                          clientY: event.clientY,
-                        })
-                      }
-                      onMouseLeave={hideTimelineSegmentTooltip}
-                      onFocus={(event) => {
-                        const rect = event.currentTarget.getBoundingClientRect();
-                        showTimelineSegmentTooltip({
-                          frame,
-                          index,
-                          clientX: rect.left + rect.width / 2,
-                          clientY: rect.top,
-                        });
-                      }}
-                      onBlur={hideTimelineSegmentTooltip}
-                      aria-label={`Go to frame ${index + 1}: ${frame.label}`}
-                      title={`Frame ${index + 1}: ${frame.label}`}
-                    />
-                  ))
-                ) : (
-                  <span className="timeline-split inactive" aria-hidden="true" />
-                )}
-              </div>
-            </div>
+          {isMobileViewport && renderMobileSeekBar()}
 
-            <TimelineSegmentTooltip hoveredSegment={hoveredTimelineSegment} />
-
-            <div className="playback-controls-row">
-              <ActionButton onClick={timelineBack} disabled={!timelineHasFrames} icon={SkipBack}>Prev</ActionButton>
-              <ActionButton onClick={toggleTimelinePlay} disabled={!timelineHasFrames} icon={timelineState.playing ? Pause : Play}>
-                {timelineState.playing ? "Pause" : "Play"}
-              </ActionButton>
-              <ActionButton onClick={timelineNext} disabled={!timelineHasFrames} icon={SkipForward}>Next</ActionButton>
-              <ActionButton onClick={replayTimeline} disabled={!timelineHasFrames} icon={RotateCcw}>Replay</ActionButton>
-
-              <div className="speed-dropdown-wrap" ref={speedMenuRef}>
-                <span className="speed-label">Speed</span>
-                <button
-                  type="button"
-                  className="speed-dropdown-btn"
-                  onClick={() => setSpeedMenuOpen((open) => !open)}
-                  aria-expanded={speedMenuOpen}
-                  aria-haspopup="listbox"
-                  aria-label="Select timeline speed"
-                >
-                  <span>{timelineSpeed}x</span>
-                  <span className="speed-caret" aria-hidden="true"><ChevronDown size={14} /></span>
-                </button>
-                {speedMenuOpen && (
-                  <ul className="speed-dropdown-menu" role="listbox" aria-label="Timeline speed options">
-                    {SPEED_OPTIONS.map((speed) => (
-                      <li key={speed}>
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={timelineSpeed === speed}
-                          className={`speed-option-btn ${timelineSpeed === speed ? "active" : ""}`}
-                          onClick={() => {
-                            setTimelineSpeed(speed);
-                            setSpeedMenuOpen(false);
-                          }}
-                        >
-                          {speed}x
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <span className="sequence-readout compact">
-                {timelineHasFrames
-                  ? `Frame ${timelineState.index + 1}/${timelineState.frames.length}`
-                  : "No modification timeline yet."}
-              </span>
-            </div>
-          </div>
+          {!isMobileViewport && renderPlaybackDock()}
         </section>
 
-        <aside className={`replay-sidebar ${rightSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Timeline and operation history">
+        <aside
+          ref={replaySidebarRef}
+          className={`replay-sidebar ${rightSidebarOpen ? "" : "collapsed"}`.trim()}
+          aria-label="Timeline and operation history"
+        >
           <span className={`status-pill ${message.ok ? "good" : "bad"}`}>{message.text}</span>
 
-          <section className="sidebar-section timeline-details">
+          <section
+            className="sidebar-section timeline-details"
+            hidden={!showTimelineSection}
+            style={isMobileViewport ? { display: "none" } : undefined}
+          >
             <div className="section-heading-row">
               <h2>Timeline</h2>
               <span className="section-meta">
@@ -2768,7 +2663,14 @@ function TreeWorkspace({
             <p className="frame-explanation">{frameExplanation}</p>
           </section>
 
-          <section className="sidebar-section history-sidebar" id="operation-history-list">
+          {isMobileViewport && showTimelineSection && renderPlaybackDock("playback-dock-inline")}
+
+          <section
+            className="sidebar-section history-sidebar"
+            id="operation-history-list"
+            hidden={!showHistorySection}
+            style={isMobileViewport ? { display: "none" } : undefined}
+          >
             <div className="history-header">
               <span>Operation History ({operationHistory.length})</span>
               <button
