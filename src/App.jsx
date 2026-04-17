@@ -1573,8 +1573,6 @@ function TreeWorkspace({
                 <ActionButton onClick={clearSearch} icon={Eraser}>Clear Highlight</ActionButton>
               </div>
             </details>
-
-            <span className={`status-pill ${message.ok ? "good" : "bad"}`}>{message.text}</span>
           </section>
 
           <section className="sidebar-section">
@@ -2006,6 +2004,8 @@ function TreeWorkspace({
         </section>
 
         <aside className={`replay-sidebar ${rightSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Timeline and operation history">
+          <span className={`status-pill ${message.ok ? "good" : "bad"}`}>{message.text}</span>
+
           <section className="sidebar-section timeline-details">
             <div className="section-heading-row">
               <h2>Timeline</h2>
