@@ -767,6 +767,12 @@ function TreeWorkspace({
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+  const [mobileRightPanel, setMobileRightPanel] = useState("timeline");
+  const [mobileOverlayHeight, setMobileOverlayHeight] = useState(0);
+  const [actionModal, setActionModal] = useState({ open: false, type: null, value: "" });
+  const [isMobileViewport, setIsMobileViewport] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 760px)").matches : false,
+  );
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -1763,6 +1769,310 @@ function TreeWorkspace({
     if (!timelineHasFrames) return;
     setTimelineState((prev) => ({ ...prev, index: 0, playing: prev.frames.length > 1 }));
   };
+
+  const toggleLeftSidebar = useCallback(() => {
+    setLeftSidebarOpen((current) => {
+      const next = !current;
+      if (isMobileViewport && next) {
+        setRightSidebarOpen(false);
+      }
+      return next;
+    });
+  }, [isMobileViewport]);
+
+  const toggleRightSidebar = useCallback(() => {
+    setRightSidebarOpen((current) => {
+      const next = !current;
+      if (isMobileViewport && next) {
+        setLeftSidebarOpen(false);
+      }
+      return next;
+    });
+  }, [isMobileViewport]);
+
+  const openMobileRightPanel = useCallback((panel) => {
+    setRightSidebarOpen((current) => {
+      if (isMobileViewport && current && mobileRightPanel === panel) {
+        return false;
+      }
+      return true;
+    });
+
+    setMobileRightPanel(panel);
+
+    if (isMobileViewport) {
+      setLeftSidebarOpen(false);
+    }
+  }, [isMobileViewport, mobileRightPanel]);
+
+  const renderPlaybackDock = (extraClassName = "") => (
+    <div className={`playback-dock ${extraClassName}`.trim()} role="group" aria-label="Timeline playback controls">
+      <div className="timeline-slider-row">
+        <div
+          className="timeline-splits timeline-splits-track"
+          role="group"
+          aria-label="Timeline frame segments"
+          style={{
+            gridTemplateColumns: `repeat(${Math.max(1, timelineState.frames.length)}, minmax(10px, 1fr))`,
+          }}
+        >
+          {timelineHasFrames ? (
+            timelineState.frames.map((frame, index) => (
+              <button
+                key={`${frame.label}-${index}`}
+                type="button"
+                className={`timeline-split ${
+                  index === timelineState.index ? "active" : index < timelineState.index ? "past" : ""
+                }`}
+                onClick={() => jumpToFrame(index)}
+                onMouseEnter={(event) =>
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                  })
+                }
+                onMouseMove={(event) =>
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                  })
+                }
+                onMouseLeave={hideTimelineSegmentTooltip}
+                onFocus={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: rect.left + rect.width / 2,
+                    clientY: rect.top,
+                  });
+                }}
+                onBlur={hideTimelineSegmentTooltip}
+                aria-label={`Go to frame ${index + 1}: ${frame.label}`}
+                title={`Frame ${index + 1}: ${frame.label}`}
+              />
+            ))
+          ) : (
+            <span className="timeline-split inactive" aria-hidden="true" />
+          )}
+        </div>
+      </div>
+
+      <TimelineSegmentTooltip hoveredSegment={hoveredTimelineSegment} />
+
+      <div className="playback-controls-row">
+        <ActionButton onClick={timelineBack} disabled={!timelineHasFrames} icon={SkipBack}>Prev</ActionButton>
+        <ActionButton onClick={toggleTimelinePlay} disabled={!timelineHasFrames} icon={timelineState.playing ? Pause : Play}>
+          {timelineState.playing ? "Pause" : "Play"}
+        </ActionButton>
+        <ActionButton onClick={timelineNext} disabled={!timelineHasFrames} icon={SkipForward}>Next</ActionButton>
+        <ActionButton onClick={replayTimeline} disabled={!timelineHasFrames} icon={RotateCcw}>Replay</ActionButton>
+
+        <div className="speed-dropdown-wrap" ref={speedMenuRef}>
+          <span className="speed-label">Speed</span>
+          <button
+            type="button"
+            className="speed-dropdown-btn"
+            onClick={() => setSpeedMenuOpen((open) => !open)}
+            aria-expanded={speedMenuOpen}
+            aria-haspopup="listbox"
+            aria-label="Select timeline speed"
+          >
+            <span>{timelineSpeed}x</span>
+            <span className="speed-caret" aria-hidden="true"><ChevronDown size={14} /></span>
+          </button>
+          {speedMenuOpen && (
+            <ul className="speed-dropdown-menu" role="listbox" aria-label="Timeline speed options">
+              {SPEED_OPTIONS.map((speed) => (
+                <li key={speed}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={timelineSpeed === speed}
+                    className={`speed-option-btn ${timelineSpeed === speed ? "active" : ""}`}
+                    onClick={() => {
+                      setTimelineSpeed(speed);
+                      setSpeedMenuOpen(false);
+                    }}
+                  >
+                    {speed}x
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <span className="sequence-readout compact">
+          {timelineHasFrames
+            ? `Frame ${timelineState.index + 1}/${timelineState.frames.length}`
+            : "No modification timeline yet."}
+        </span>
+      </div>
+    </div>
+  );
+
+  const renderMobileSeekBar = () => (
+    <div className="mobile-seekbar-dock" role="group" aria-label="Timeline seek bar">
+      <div className="timeline-slider-row">
+        <div
+          className="timeline-splits timeline-splits-track"
+          role="group"
+          aria-label="Timeline frame segments"
+          style={{
+            gridTemplateColumns: `repeat(${Math.max(1, timelineState.frames.length)}, minmax(10px, 1fr))`,
+          }}
+        >
+          {timelineHasFrames ? (
+            timelineState.frames.map((frame, index) => (
+              <button
+                key={`mobile-${frame.label}-${index}`}
+                type="button"
+                className={`timeline-split ${
+                  index === timelineState.index ? "active" : index < timelineState.index ? "past" : ""
+                }`}
+                onClick={() => jumpToFrame(index)}
+                onMouseEnter={(event) =>
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                  })
+                }
+                onMouseMove={(event) =>
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                  })
+                }
+                onMouseLeave={hideTimelineSegmentTooltip}
+                onFocus={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: rect.left + rect.width / 2,
+                    clientY: rect.top,
+                  });
+                }}
+                onBlur={hideTimelineSegmentTooltip}
+                aria-label={`Go to frame ${index + 1}: ${frame.label}`}
+                title={`Frame ${index + 1}: ${frame.label}`}
+              />
+            ))
+          ) : (
+            <span className="timeline-split inactive" aria-hidden="true" />
+          )}
+        </div>
+      </div>
+      <div className="mobile-seekbar-controls" role="group" aria-label="Timeline playback controls">
+        <button
+          type="button"
+          className="mobile-seekbar-control-btn"
+          onClick={timelineBack}
+          disabled={!timelineHasFrames}
+          aria-label="Previous frame"
+          title="Previous frame"
+        >
+          <SkipBack size={15} className="btn-icon" />
+        </button>
+        <button
+          type="button"
+          className="mobile-seekbar-control-btn mobile-seekbar-control-btn-play"
+          onClick={toggleTimelinePlay}
+          disabled={!timelineHasFrames}
+          aria-label={timelineState.playing ? "Pause timeline" : "Play timeline"}
+          title={timelineState.playing ? "Pause timeline" : "Play timeline"}
+        >
+          {timelineState.playing ? <Pause size={16} className="btn-icon" /> : <Play size={16} className="btn-icon" />}
+        </button>
+        <button
+          type="button"
+          className="mobile-seekbar-control-btn"
+          onClick={timelineNext}
+          disabled={!timelineHasFrames}
+          aria-label="Next frame"
+          title="Next frame"
+        >
+          <SkipForward size={15} className="btn-icon" />
+        </button>
+      </div>
+      <span className="sequence-readout compact mobile-seekbar-label">
+        {timelineHasFrames
+          ? `Frame ${timelineState.index + 1}/${timelineState.frames.length}`
+          : "No modification timeline yet."}
+      </span>
+      <TimelineSegmentTooltip hoveredSegment={hoveredTimelineSegment} />
+    </div>
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const media = window.matchMedia("(max-width: 760px)");
+    const applyMobileState = (matches) => {
+      setIsMobileViewport(matches);
+      setLeftSidebarOpen((prev) => (matches ? false : prev));
+      setRightSidebarOpen((prev) => (matches ? false : prev));
+      if (matches) {
+        setMobileRightPanel("timeline");
+      }
+    };
+
+    applyMobileState(media.matches);
+
+    const handleChange = (event) => applyMobileState(event.matches);
+    media.addEventListener("change", handleChange);
+
+    return () => {
+      media.removeEventListener("change", handleChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileViewport || !rightSidebarOpen) {
+      setMobileOverlayHeight(0);
+      return undefined;
+    }
+
+    const sidebar = replaySidebarRef.current;
+    if (!sidebar) {
+      setMobileOverlayHeight(0);
+      return undefined;
+    }
+
+    const updateOverlayHeight = () => {
+      const rect = sidebar.getBoundingClientRect();
+      setMobileOverlayHeight(Math.max(0, Math.ceil(rect.height)));
+    };
+
+    updateOverlayHeight();
+
+    let observer;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(updateOverlayHeight);
+      observer.observe(sidebar);
+    }
+
+    window.addEventListener("resize", updateOverlayHeight);
+
+    return () => {
+      window.removeEventListener("resize", updateOverlayHeight);
+      if (observer) observer.disconnect();
+    };
+  }, [isMobileViewport, rightSidebarOpen, mobileRightPanel]);
+
+  const workspaceStyle =
+    isMobileViewport && rightSidebarOpen
+      ? { "--replay-overlay-height": `${mobileOverlayHeight}px` }
+      : undefined;
 
   const typeLegend =
     type === "AVL"
