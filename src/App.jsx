@@ -2909,66 +2909,19 @@ export default function App() {
     ...TREE_TYPE_ORDER.map((key) => ({ key: TREE_CONFIG[key].tab, label: TREE_CONFIG[key].shortLabel })),
   ];
 
-  const recalculateHeaderTitle = useCallback(() => {
-    const row = headerRowRef.current;
-    const switcher = headerSwitcherRef.current;
-    const settingsButton = settingsBtnRef.current;
-    const titleElement = titleRef.current;
-
-    if (!row || !switcher || !settingsButton || !titleElement) return;
-
-    const rowWidth = row.getBoundingClientRect().width;
-    const switcherWidth = Math.max(330, switcher.getBoundingClientRect().width, switcher.scrollWidth);
-    const headerButtonsWidth = settingsButton.getBoundingClientRect().width;
-
-    const style = window.getComputedStyle(titleElement);
-    const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-
-    let fullTitleWidth = titleElement.scrollWidth;
-    if (context) {
-      context.font = font;
-      fullTitleWidth = Math.ceil(context.measureText(APP_TITLE_FULL).width);
-    }
-
-    const spacingAllowance = 60;
-    const requiredWidth = switcherWidth + headerButtonsWidth + fullTitleWidth + spacingAllowance;
-
-    setUseCompactTitle(requiredWidth > rowWidth);
-  }, []);
-
   useEffect(() => {
-    recalculateHeaderTitle();
-
-    const observer = new ResizeObserver(() => {
-      recalculateHeaderTitle();
-    });
-
-    if (headerRowRef.current) observer.observe(headerRowRef.current);
-    if (headerSwitcherRef.current) observer.observe(headerSwitcherRef.current);
-    if (settingsBtnRef.current) observer.observe(settingsBtnRef.current);
-
-    window.addEventListener("resize", recalculateHeaderTitle);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", recalculateHeaderTitle);
-    };
-  }, [recalculateHeaderTitle]);
-
-  useEffect(() => {
-    if (!settingsOpen) return undefined;
+    if (!settingsOpen && !mobileMenuOpen) return undefined;
 
     const closeOnEscape = (event) => {
       if (event.key === "Escape") {
         setSettingsOpen(false);
+        setMobileMenuOpen(false);
       }
     };
 
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [settingsOpen]);
+  }, [settingsOpen, mobileMenuOpen]);
 
   return (
     <>
