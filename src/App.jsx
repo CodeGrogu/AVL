@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Trash2, Search, Eraser, ArrowDownToLine, ArrowUpToLine, Dices, Trash,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
-  ChevronDown, ZoomIn, ZoomOut, Maximize,
+  ChevronDown, ZoomIn, ZoomOut, Maximize, Menu, X, History,
   SkipBack, Play, Pause, SkipForward, RotateCcw, SlidersHorizontal
 } from "lucide-react";
 import {
@@ -44,6 +44,12 @@ const APP_TITLE_FULL = "Modular Binary Tree Lab";
 const APP_TITLE_COMPACT = "MBTL";
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const getTouchDistance = (first, second) =>
+  Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+const getTouchCenter = (first, second) => ({
+  x: (first.clientX + second.clientX) / 2,
+  y: (first.clientY + second.clientY) / 2,
+});
 
 const getHistorySignature = (values) => values.join("|");
 
@@ -749,6 +755,21 @@ function TreeWorkspace({
   const [hoveredTimelineSegment, setHoveredTimelineSegment] = useState(null);
 
   const dragRef = useRef({ active: false, startX: 0, startY: 0, panX: 0, panY: 0 });
+  const externalOperationNonceRef = useRef(null);
+  const touchRef = useRef({
+    mode: null,
+    touchId: null,
+    startX: 0,
+    startY: 0,
+    panX: 0,
+    panY: 0,
+    pinchDistance: 0,
+    pinchZoom: 1,
+    pinchPanX: 0,
+    pinchPanY: 0,
+    pinchCenterX: 0,
+    pinchCenterY: 0,
+  });
   const canvasRef = useRef(null);
   const resizeTimeoutRef = useRef(null);
   const traversalTimerRef = useRef(null);
@@ -879,6 +900,160 @@ function TreeWorkspace({
       canvas.removeEventListener("wheel", onWheel);
     };
   }, [handleCanvasWheel]);
+
+  const handleCanvasTouchStart = useCallback((event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    dragRef.current.active = false;
+
+    if (event.touches.length === 2) {
+      const [first, second] = event.touches;
+      const rect = canvas.getBoundingClientRect();
+      const center = getTouchCenter(first, second);
+
+      touchRef.current = {
+        ...touchRef.current,
+        mode: "pinch",
+        touchId: null,
+        pinchDistance: getTouchDistance(first, second),
+        pinchZoom: zoom,
+        pinchPanX: pan.x,
+        pinchPanY: pan.y,
+        pinchCenterX: center.x - rect.left,
+        pinchCenterY: center.y - rect.top,
+      };
+
+      setIsDragging(true);
+      event.preventDefault();
+      return;
+    }
+
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      touchRef.current = {
+        ...touchRef.current,
+        mode: "pan",
+        touchId: touch.identifier,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        panX: pan.x,
+        panY: pan.y,
+      };
+      setIsDragging(true);
+    }
+  }, [pan.x, pan.y, zoom]);
+
+  const handleCanvasTouchMove = useCallback((event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (touchRef.current.mode === "pinch" && event.touches.length === 2) {
+      const [first, second] = event.touches;
+      const nextDistance = getTouchDistance(first, second);
+      if (!touchRef.current.pinchDistance) return;
+
+      const zoomScale = nextDistance / touchRef.current.pinchDistance;
+      const nextZoom = snapZoomValue(touchRef.current.pinchZoom * zoomScale);
+
+      const baseZoom = Math.max(0.1, touchRef.current.pinchZoom);
+      const worldX = (touchRef.current.pinchCenterX - touchRef.current.pinchPanX) / baseZoom;
+      const worldY = (touchRef.current.pinchCenterY - touchRef.current.pinchPanY) / baseZoom;
+
+      setZoom(nextZoom);
+      setPan({
+        x: touchRef.current.pinchCenterX - worldX * nextZoom,
+        y: touchRef.current.pinchCenterY - worldY * nextZoom,
+      });
+
+      event.preventDefault();
+      return;
+    }
+
+    if (touchRef.current.mode !== "pan") return;
+
+    const touch = Array.from(event.touches).find((entry) => entry.identifier === touchRef.current.touchId)
+      ?? event.touches[0];
+    if (!touch) return;
+
+    setPan({
+      x: touchRef.current.panX + touch.clientX - touchRef.current.startX,
+      y: touchRef.current.panY + touch.clientY - touchRef.current.startY,
+    });
+
+    event.preventDefault();
+  }, [snapZoomValue]);
+
+  const handleCanvasTouchEnd = useCallback((event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (!event.touches.length) {
+      touchRef.current.mode = null;
+      touchRef.current.touchId = null;
+      setIsDragging(false);
+      return;
+    }
+
+    if (event.touches.length === 2) {
+      const [first, second] = event.touches;
+      const rect = canvas.getBoundingClientRect();
+      const center = getTouchCenter(first, second);
+
+      touchRef.current = {
+        ...touchRef.current,
+        mode: "pinch",
+        touchId: null,
+        pinchDistance: getTouchDistance(first, second),
+        pinchZoom: zoom,
+        pinchPanX: pan.x,
+        pinchPanY: pan.y,
+        pinchCenterX: center.x - rect.left,
+        pinchCenterY: center.y - rect.top,
+      };
+      return;
+    }
+
+    const touch = event.touches[0];
+    touchRef.current = {
+      ...touchRef.current,
+      mode: "pan",
+      touchId: touch.identifier,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      panX: pan.x,
+      panY: pan.y,
+    };
+  }, [pan.x, pan.y, zoom]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+
+    const onTouchStart = (event) => {
+      handleCanvasTouchStart(event);
+    };
+
+    const onTouchMove = (event) => {
+      handleCanvasTouchMove(event);
+    };
+
+    const onTouchEnd = (event) => {
+      handleCanvasTouchEnd(event);
+    };
+
+    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvas.addEventListener("touchend", onTouchEnd, { passive: false });
+    canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
+
+    return () => {
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", onTouchEnd);
+      canvas.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [handleCanvasTouchEnd, handleCanvasTouchMove, handleCanvasTouchStart]);
 
   useEffect(() => {
     fitCanvas();
