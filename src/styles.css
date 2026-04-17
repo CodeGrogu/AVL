@@ -130,7 +130,13 @@ body::-webkit-scrollbar,
   justify-content: space-between;
 }
 
-.about-btn {
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-btn {
   border: 1px solid var(--border);
   border-radius: 999px;
   height: 26px;
@@ -1407,7 +1413,7 @@ body::-webkit-scrollbar,
   z-index: 100;
 }
 
-.about-modal {
+.settings-modal {
   width: min(460px, 100%);
   border-radius: 16px;
   border: 1px solid var(--border);
@@ -1416,17 +1422,77 @@ body::-webkit-scrollbar,
   box-shadow: 0 24px 46px -26px rgba(18, 35, 63, 0.5);
 }
 
-.about-modal h2 {
+.settings-modal h2 {
   margin: 0;
   font-size: 1.04rem;
   color: #123252;
 }
 
-.about-modal p {
+.settings-about {
   margin: 10px 0 14px;
   color: #4b6280;
   line-height: 1.5;
   font-size: 0.86rem;
+}
+
+.settings-credit {
+  margin: 0 0 14px;
+  color: #4b6280;
+  font-size: 0.82rem;
+}
+
+.settings-credit-link {
+  color: #1d4ed8;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.settings-credit-link:hover {
+  text-decoration: underline;
+}
+
+.setting-item {
+  margin: 12px 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.setting-copy {
+  min-width: 0;
+}
+
+.setting-copy h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #123252;
+}
+
+.setting-copy p {
+  margin: 4px 0 0;
+  color: #4b6280;
+  line-height: 1.4;
+  font-size: 0.8rem;
+}
+
+.setting-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #1f3553;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.setting-checkbox input {
+  width: 14px;
+  height: 14px;
 }
 
 /* --- Crazy Premium Animations --- */
@@ -1741,7 +1807,7 @@ body::-webkit-scrollbar,
 .speed-option-btn:focus-visible,
 .value-input:focus-visible,
 .tree-canvas:focus-visible,
-.about-btn:focus-visible,
+.settings-btn:focus-visible,
 .legend-toggle:focus-visible,
 .sidebar-toggle-btn:focus-visible,
 .timeline-split:focus-visible {
@@ -1801,9 +1867,18 @@ body::-webkit-scrollbar,
     font-size: 0.72rem;
   }
 
-  .about-btn {
+  .settings-btn {
     padding: 6px 10px;
     font-size: 0.72rem;
+  }
+
+  .setting-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .setting-checkbox {
+    justify-content: flex-end;
   }
 
   .learn-grid {

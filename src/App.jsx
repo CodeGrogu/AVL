@@ -3,7 +3,7 @@ import {
   Plus, Trash2, Search, Eraser, ArrowDownToLine, ArrowUpToLine, Dices, Trash,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
   ChevronDown, ZoomIn, ZoomOut, Maximize,
-  SkipBack, Play, Pause, SkipForward, RotateCcw, Info
+  SkipBack, Play, Pause, SkipForward, RotateCcw, SlidersHorizontal
 } from "lucide-react";
 import {
   buildTree,
@@ -28,6 +28,9 @@ const INITIAL_VALUES = [50, 30, 70, 20, 40, 60, 80, 10, 35, 55, 75];
 const NODE_RADIUS = 24;
 const STORAGE_KEY = "modular-tree-lab:v2";
 const STORAGE_VERSION = 2;
+const DEFAULT_SETTINGS = {
+  invertTrackpadPan: true,
+};
 
 const TRAVERSALS = [
   { key: "pre", label: "Pre-order", run: (root) => preOrder(root) },
@@ -115,6 +118,7 @@ const createDefaultStorage = () => ({
     activeTab: "learn",
     treeType: "BST",
     history: [...INITIAL_VALUES],
+    settings: { ...DEFAULT_SETTINGS },
   },
   sessionsByType: TREE_TYPE_ORDER.reduce((acc, type) => {
     acc[type] = createEmptySession();
@@ -133,6 +137,13 @@ const sanitizeHistory = (candidate) => {
   return [...new Set(parsed)];
 };
 
+const sanitizeSettings = (candidate) => ({
+  invertTrackpadPan:
+    typeof candidate?.invertTrackpadPan === "boolean"
+      ? candidate.invertTrackpadPan
+      : DEFAULT_SETTINGS.invertTrackpadPan,
+});
+
 const readPersistedState = () => {
   if (typeof window === "undefined") return createDefaultStorage();
 
@@ -147,6 +158,7 @@ const readPersistedState = () => {
     const treeType = TREE_CONFIG[parsed.app?.treeType] ? parsed.app.treeType : "BST";
     const activeTab = parsed.app?.activeTab === "learn" ? "learn" : TYPE_TO_TAB[treeType];
     const history = sanitizeHistory(parsed.app?.history);
+    const settings = sanitizeSettings(parsed.app?.settings);
 
     const sessionsByType = TREE_TYPE_ORDER.reduce((acc, type) => {
       acc[type] = sanitizePersistedSession(parsed.sessionsByType?.[type]);
@@ -155,7 +167,7 @@ const readPersistedState = () => {
 
     return {
       version: STORAGE_VERSION,
-      app: { activeTab, treeType, history },
+      app: { activeTab, treeType, history, settings },
       sessionsByType,
     };
   } catch {
@@ -707,6 +719,7 @@ function TreeWorkspace({
   history,
   session,
   onSessionChange,
+  invertTrackpadPan,
 }) {
   const config = TREE_CONFIG[type];
 
@@ -754,10 +767,8 @@ function TreeWorkspace({
     return parseFloat((Math.round(bounded * 20) / 20).toFixed(2));
   }, []);
 
-  const snapPanPoint = useCallback((point) => ({ x: Math.round(point.x), y: Math.round(point.y) }), []);
-
   const renderedZoom = useMemo(() => snapZoomValue(zoom), [zoom, snapZoomValue]);
-  const renderedPan = useMemo(() => snapPanPoint(pan), [pan, snapPanPoint]);
+  const renderedPan = pan;
 
   const timelineFrame = timelineState.frames[timelineState.index] ?? null;
   const visualRoot = timelineFrame?.root ?? root;
@@ -805,11 +816,11 @@ function TreeWorkspace({
     );
 
     setZoom(nextZoom);
-    setPan(snapPanPoint({
+    setPan({
       x: Math.max(0, (svgWidth - currentLayout.width * nextZoom) / 2),
       y: Math.max(14, (svgHeight - currentLayout.height * nextZoom) / 2),
-    }));
-  }, [currentLayout, snapPanPoint, snapZoomValue]);
+    });
+  }, [currentLayout, snapZoomValue]);
 
   const handleCanvasWheel = useCallback((event) => {
     event.preventDefault();
@@ -832,10 +843,10 @@ function TreeWorkspace({
           const worldX = (pointerX - currentPan.x) / currentZoom;
           const worldY = (pointerY - currentPan.y) / currentZoom;
 
-          return snapPanPoint({
+          return {
             x: pointerX - worldX * nextZoom,
             y: pointerY - worldY * nextZoom,
-          });
+          };
         });
 
         return nextZoom;
@@ -844,13 +855,15 @@ function TreeWorkspace({
       return;
     }
 
+    const panDirection = invertTrackpadPan ? -1 : 1;
+
     setPan((currentPan) =>
-      snapPanPoint({
-        x: currentPan.x - event.deltaX,
-        y: currentPan.y - event.deltaY,
+      ({
+        x: currentPan.x + event.deltaX * panDirection,
+        y: currentPan.y + event.deltaY * panDirection,
       }),
     );
-  }, [snapPanPoint, snapZoomValue]);
+  }, [invertTrackpadPan, snapZoomValue]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -2055,17 +2068,18 @@ export default function App() {
   const persistedRef = useRef(readPersistedState());
   const headerRowRef = useRef(null);
   const headerSwitcherRef = useRef(null);
-  const aboutBtnRef = useRef(null);
+  const settingsBtnRef = useRef(null);
   const titleRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState(persistedRef.current.app.activeTab);
   const [treeType, setTreeType] = useState(persistedRef.current.app.treeType);
   const [history, setHistory] = useState(persistedRef.current.app.history);
+  const [settings, setSettings] = useState(() => sanitizeSettings(persistedRef.current.app.settings));
   const [root, setRoot] = useState(() =>
     buildTree(persistedRef.current.app.history, TREE_CONFIG[persistedRef.current.app.treeType].insert),
   );
   const [sessionsByType, setSessionsByType] = useState(persistedRef.current.sessionsByType);
-  const [aboutOpen, setAboutOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [useCompactTitle, setUseCompactTitle] = useState(false);
 
   useEffect(() => {
@@ -2075,10 +2089,11 @@ export default function App() {
         activeTab,
         treeType,
         history,
+        settings,
       },
       sessionsByType,
     });
-  }, [activeTab, treeType, history, sessionsByType]);
+  }, [activeTab, treeType, history, settings, sessionsByType]);
 
   const updateCurrentSession = useCallback(
     (nextSession) => {
@@ -2090,10 +2105,120 @@ export default function App() {
     [treeType],
   );
 
+  const replaySessionForType = useCallback((sourceSession, nextType) => {
+    const source = sanitizePersistedSession(sourceSession);
+    const targetConfig = TREE_CONFIG[nextType];
+    const chrono = [...source.operationHistory].reverse();
+
+    let replayRoot = null;
+    const replayedChrono = [];
+
+    for (let index = 0; index < chrono.length; index += 1) {
+      const sourceEntry = chrono[index];
+      const title = sourceEntry.title ?? "";
+
+      const insertMatch = title.match(/^(?:Insert|Random insert)\s+(-?\d+)$/);
+      const deleteMatch = title.match(/^Delete\s+(-?\d+)$/);
+      const isClear = title === "Clear tree";
+
+      let frames = [];
+      let summary = sourceEntry.summary;
+
+      if (insertMatch) {
+        const value = Number.parseInt(insertMatch[1], 10);
+        const path = searchPath(replayRoot, value).path;
+        const trace = targetConfig.traceInsert(replayRoot, value);
+
+        frames = buildTimeline({
+          beforeRoot: replayRoot,
+          path,
+          traceFrames: trace.frames,
+          afterRoot: trace.root,
+          actionLabel: title.startsWith("Random") ? "Random insert" : "Insert",
+          value,
+        });
+
+        summary = summarizeFrames(frames, `Inserted ${value}.`);
+        replayRoot = trace.root;
+      } else if (deleteMatch) {
+        const value = Number.parseInt(deleteMatch[1], 10);
+        const path = searchPath(replayRoot, value).path;
+        const trace = targetConfig.traceRemove(replayRoot, value);
+
+        frames = buildTimeline({
+          beforeRoot: replayRoot,
+          path,
+          traceFrames: trace.frames,
+          afterRoot: trace.root,
+          actionLabel: "Delete",
+          value,
+        });
+
+        summary = summarizeFrames(frames, `Deleted ${value}.`);
+        replayRoot = trace.root;
+      } else if (isClear) {
+        frames = buildTimeline({
+          beforeRoot: replayRoot,
+          path: [],
+          traceFrames: [{ root: null, label: "Cleared tree", focus: [], kind: "delete", explanation: "All nodes removed." }],
+          afterRoot: null,
+          actionLabel: "Clear",
+        });
+
+        summary = "All nodes removed from the tree.";
+        replayRoot = null;
+      }
+
+      if (!frames.length) continue;
+
+      replayedChrono.push({
+        id: `sync-${nextType.toLowerCase()}-${index}-${Date.now()}`,
+        title: sourceEntry.title,
+        summary,
+        frames,
+        timeLabel: sourceEntry.timeLabel,
+      });
+    }
+
+    if (!replayedChrono.length) {
+      return {
+        ...createEmptySession(),
+        historySignature: getHistorySignature(history),
+      };
+    }
+
+    const newestFirst = replayedChrono.slice(-30).reverse();
+    const selected = newestFirst[0];
+
+    return {
+      operationHistory: newestFirst,
+      selectedOperationId: selected.id,
+      timelineState: {
+        frames: selected.frames,
+        index: Math.max(0, selected.frames.length - 1),
+        playing: false,
+      },
+      timelineSpeed: source.timelineSpeed,
+      zoom: source.zoom,
+      pan: source.pan,
+      historySignature: getHistorySignature(history),
+    };
+  }, [history]);
+
   const convertTo = (nextType) => {
     if (nextType === treeType) return;
 
     const rebuiltRoot = buildTree(history, TREE_CONFIG[nextType].insert);
+
+    setSessionsByType((prev) => {
+      const currentSession = sanitizePersistedSession(prev[treeType]);
+      const nextSession = replaySessionForType(currentSession, nextType);
+
+      return {
+        ...prev,
+        [nextType]: sanitizePersistedSession(nextSession),
+      };
+    });
 
     setRoot(rebuiltRoot);
     setTreeType(nextType);
@@ -2113,14 +2238,14 @@ export default function App() {
   const recalculateHeaderTitle = useCallback(() => {
     const row = headerRowRef.current;
     const switcher = headerSwitcherRef.current;
-    const aboutButton = aboutBtnRef.current;
+    const settingsButton = settingsBtnRef.current;
     const titleElement = titleRef.current;
 
-    if (!row || !switcher || !aboutButton || !titleElement) return;
+    if (!row || !switcher || !settingsButton || !titleElement) return;
 
     const rowWidth = row.getBoundingClientRect().width;
     const switcherWidth = Math.max(330, switcher.getBoundingClientRect().width, switcher.scrollWidth);
-    const aboutWidth = aboutButton.getBoundingClientRect().width;
+    const headerButtonsWidth = settingsButton.getBoundingClientRect().width;
 
     const style = window.getComputedStyle(titleElement);
     const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
@@ -2134,7 +2259,7 @@ export default function App() {
     }
 
     const spacingAllowance = 60;
-    const requiredWidth = switcherWidth + aboutWidth + fullTitleWidth + spacingAllowance;
+    const requiredWidth = switcherWidth + headerButtonsWidth + fullTitleWidth + spacingAllowance;
 
     setUseCompactTitle(requiredWidth > rowWidth);
   }, []);
@@ -2148,7 +2273,7 @@ export default function App() {
 
     if (headerRowRef.current) observer.observe(headerRowRef.current);
     if (headerSwitcherRef.current) observer.observe(headerSwitcherRef.current);
-    if (aboutBtnRef.current) observer.observe(aboutBtnRef.current);
+    if (settingsBtnRef.current) observer.observe(settingsBtnRef.current);
 
     window.addEventListener("resize", recalculateHeaderTitle);
 
@@ -2157,6 +2282,19 @@ export default function App() {
       window.removeEventListener("resize", recalculateHeaderTitle);
     };
   }, [recalculateHeaderTitle]);
+
+  useEffect(() => {
+    if (!settingsOpen) return undefined;
+
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setSettingsOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [settingsOpen]);
 
   return (
     <>
@@ -2176,16 +2314,18 @@ export default function App() {
                 />
               </div>
             </div>
-            <button
-              type="button"
-              className="about-btn"
-              ref={aboutBtnRef}
-              onClick={() => setAboutOpen(true)}
-              aria-haspopup="dialog"
-              aria-expanded={aboutOpen}
-            >
-              <Info size={14} /> About
-            </button>
+            <div className="header-actions">
+              <button
+                type="button"
+                className="settings-btn"
+                ref={settingsBtnRef}
+                onClick={() => setSettingsOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={settingsOpen}
+              >
+                <SlidersHorizontal size={14} /> Settings
+              </button>
+            </div>
           </div>
         </header>
 
@@ -2208,26 +2348,56 @@ export default function App() {
               history={history}
               session={sessionsByType[treeType]}
               onSessionChange={updateCurrentSession}
+              invertTrackpadPan={settings.invertTrackpadPan}
             />
           </section>
         )}
       </main>
 
-      {aboutOpen && (
-        <div className="modal-backdrop" role="presentation" onClick={() => setAboutOpen(false)}>
+      {settingsOpen && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setSettingsOpen(false)}>
           <section
-            className="about-modal"
+            className="settings-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="about-modal-title"
+            aria-labelledby="settings-modal-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="about-modal-title">About this playground</h2>
-            <p>
+            <h2 id="settings-modal-title">Settings</h2>
+            <p className="settings-about">
               Explore BST, AVL, and Red-Black trees through interactive operations, traversal highlights, and replayable
               structural timelines.
             </p>
-            <button type="button" className="btn" onClick={() => setAboutOpen(false)}>Close</button>
+            <p className="settings-credit">
+              Credits:{" "}
+              <a
+                className="settings-credit-link"
+                href="https://github.com/CodeGrogu"
+                target="_blank"
+                rel="noreferrer"
+              >
+                CodeGrogu
+              </a>
+            </p>
+            <div className="setting-item">
+              <div className="setting-copy">
+                <h3>Invert trackpad pan</h3>
+                <p>
+                  Enabled means swipe up pans down and swipe left pans right. Disable if you prefer standard wheel mapping.
+                </p>
+              </div>
+              <label className="setting-checkbox">
+                <input
+                  type="checkbox"
+                  checked={settings.invertTrackpadPan}
+                  onChange={(event) => {
+                    setSettings((prev) => ({ ...prev, invertTrackpadPan: event.target.checked }));
+                  }}
+                />
+                <span>Enabled</span>
+              </label>
+            </div>
+            <button type="button" className="btn" onClick={() => setSettingsOpen(false)}>Close</button>
           </section>
         </div>
       )}
