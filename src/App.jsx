@@ -746,6 +746,7 @@ function TreeWorkspace({
   session,
   onSessionChange,
   invertTrackpadPan,
+  externalOperationRequest,
 }) {
   const config = TREE_CONFIG[type];
 
@@ -1456,6 +1457,21 @@ function TreeWorkspace({
     });
     setOk(`Loaded replay: ${entry.title}`);
   };
+
+  useEffect(() => {
+    if (!externalOperationRequest) return;
+    if (externalOperationRequest.type !== type) return;
+    if (externalOperationRequest.nonce === externalOperationNonceRef.current) return;
+
+    externalOperationNonceRef.current = externalOperationRequest.nonce;
+    loadOperation(externalOperationRequest.operationId, false);
+
+    if (isMobileViewport) {
+      setRightSidebarOpen(true);
+      setMobileRightPanel("history");
+      setLeftSidebarOpen(false);
+    }
+  }, [externalOperationRequest, type, isMobileViewport, operationHistory]);
 
   const jumpToFrame = (index) => {
     setTimelineState((prev) => {
