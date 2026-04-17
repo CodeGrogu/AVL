@@ -440,9 +440,9 @@ const interpolateLayout = (fromLayout, toLayout, progress) => {
   };
 };
 
-function ActionButton({ children, onClick, variant = "neutral", disabled = false, icon: Icon }) {
+function ActionButton({ children, onClick, variant = "neutral", disabled = false, icon: Icon, className = "" }) {
   return (
-    <button type="button" className={`btn ${variant}`} onClick={onClick} disabled={disabled}>
+    <button type="button" className={`btn ${variant} ${className}`.trim()} onClick={onClick} disabled={disabled}>
       {Icon && <Icon size={14} className="btn-icon" />}
       {children}
     </button>
