@@ -1016,6 +1016,8 @@ body::-webkit-scrollbar,
 
 .canvas-stage {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   padding: 0;
   background: linear-gradient(180deg, #fcfdff, #f5f9fd);
@@ -1207,7 +1209,8 @@ body::-webkit-scrollbar,
     linear-gradient(180deg, #fbfdff, #f4f8fc),
     repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(104, 140, 176, 0.08) 20px);
   min-height: 0;
-  height: 100%;
+  flex: 1 1 auto;
+  height: auto;
   max-height: none;
   border-radius: 0;
   border: 0;
@@ -1220,6 +1223,7 @@ body::-webkit-scrollbar,
   display: block;
   user-select: none;
   cursor: grab;
+  touch-action: none;
   border: 0;
   border-radius: 0;
   text-rendering: geometricPrecision;
