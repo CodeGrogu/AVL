@@ -792,6 +792,22 @@ body::-webkit-scrollbar,
   background: var(--info-soft);
 }
 
+.control-sidebar .fab-control-btn,
+.control-sidebar .fab-control-chip {
+  border-radius: 999px;
+  box-shadow: 0 6px 14px -12px rgba(12, 24, 46, 0.7);
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.control-sidebar .fab-control-btn {
+  justify-content: center;
+}
+
+.control-sidebar .fab-control-chip {
+  font-size: 0.72rem;
+}
+
 .status-pill {
   width: 100%;
   border-radius: 10px;
