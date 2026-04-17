@@ -2924,6 +2924,7 @@ export default function App() {
 
   const switchTab = (tabKey) => {
     setActiveTab(tabKey);
+    setMobileMenuOpen(false);
     if (tabKey !== "learn" && TAB_TO_TYPE[tabKey] !== treeType) convertTo(TAB_TO_TYPE[tabKey]);
   };
 
@@ -3001,18 +3002,17 @@ export default function App() {
                   className="app-header-switcher"
                 />
               </div>
-            </div>
-            <div className="header-actions">
-              <button
-                type="button"
-                className="settings-btn"
-                ref={settingsBtnRef}
-                onClick={() => setSettingsOpen(true)}
-                aria-haspopup="dialog"
-                aria-expanded={settingsOpen}
-              >
-                <SlidersHorizontal size={14} /> Settings
-              </button>
+              <div className="header-actions">
+                <button
+                  type="button"
+                  className="settings-btn"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={settingsOpen}
+                >
+                  <SlidersHorizontal size={14} /> Settings
+                </button>
+              </div>
             </div>
           </div>
         </header>
