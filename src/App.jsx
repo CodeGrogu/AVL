@@ -2116,35 +2116,31 @@ function TreeWorkspace({
   };
 
   const extraMetric = config.extraMetric(root);
+  const showTimelineSection = !isMobileViewport || mobileRightPanel === "timeline";
+  const showHistorySection = !isMobileViewport || mobileRightPanel === "history";
+  const workspaceLayoutClassName = isMobileViewport
+    ? "workspace-layout mobile-mode"
+    : `workspace-layout ${leftSidebarOpen ? "" : "left-sidebar-collapsed"} ${
+        rightSidebarOpen ? "" : "right-sidebar-collapsed"
+      }`.trim();
+
   return (
     <section className="workspace">
       <div
-        className={`workspace-layout ${leftSidebarOpen ? "" : "left-sidebar-collapsed"} ${
-          rightSidebarOpen ? "" : "right-sidebar-collapsed"
-        }`.trim()}
+        className={workspaceLayoutClassName}
+        style={workspaceStyle}
       >
-        <aside className={`control-sidebar ${leftSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Control panel">
+        {!isMobileViewport && (
+          <aside className={`control-sidebar ${leftSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Control panel">
           <section className="sidebar-section">
             <div className="section-heading-row">
               <h2>Actions</h2>
             </div>
 
-            <label htmlFor="tree-value-input" className="input-label">Value</label>
-            <input
-              id="tree-value-input"
-              value={input}
-              type="number"
-              placeholder="integer"
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && onInsert()}
-              className="value-input"
-              disabled={isTimelinePlaying}
-            />
-
             <div className="action-grid">
-              <ActionButton variant="success" onClick={onInsert} disabled={isTimelinePlaying} icon={Plus}>Insert</ActionButton>
-              <ActionButton variant="danger" onClick={onDelete} disabled={isTimelinePlaying} icon={Trash2}>Delete</ActionButton>
-              <ActionButton onClick={onSearch} disabled={isTimelinePlaying} icon={Search}>Search</ActionButton>
+              <ActionButton variant="success" onClick={() => openActionModal("insert")} disabled={isTimelinePlaying} icon={Plus}>Insert</ActionButton>
+              <ActionButton variant="danger" onClick={() => openActionModal("delete")} disabled={isTimelinePlaying} icon={Trash2}>Delete</ActionButton>
+              <ActionButton onClick={() => openActionModal("search")} disabled={isTimelinePlaying} icon={Search}>Search</ActionButton>
               <ActionButton onClick={onClearAll} disabled={isTimelinePlaying} icon={Trash}>Clear All</ActionButton>
             </div>
 
@@ -2230,21 +2226,24 @@ function TreeWorkspace({
               <LegendDot fill="#fef3c7" stroke="#92400e" ring="#d97706" label="Delete / replace" />
             </div>
           </section>
-        </aside>
+          </aside>
+        )}
 
         <section className="canvas-stage" aria-label="Tree visualization">
-          <div className="canvas-overlay stats-overlay-group">
-            <button
-              type="button"
-              className="sidebar-toggle-btn canvas-top-btn icon-toggle"
-              aria-label={leftSidebarOpen ? "Hide left sidebar" : "Show left sidebar"}
-              aria-expanded={leftSidebarOpen}
-              onClick={() => setLeftSidebarOpen((value) => !value)}
-            >
-              <span aria-hidden="true" className="toggle-icon">
-                {leftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-              </span>
-            </button>
+          <div className="stats-overlay-group" role="group" aria-label="Tree statistics and layout controls">
+            {!isMobileViewport && (
+              <button
+                type="button"
+                className="sidebar-toggle-btn canvas-top-btn icon-toggle"
+                aria-label={leftSidebarOpen ? "Hide left sidebar" : "Show left sidebar"}
+                aria-expanded={leftSidebarOpen}
+                onClick={toggleLeftSidebar}
+              >
+                <span aria-hidden="true" className="toggle-icon">
+                  {leftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+                </span>
+              </button>
+            )}
 
             <div className="stats-overlay" aria-label="Tree statistics">
               <span>Nodes: <b>{treeSize(root)}</b></span>
@@ -2255,42 +2254,182 @@ function TreeWorkspace({
               <span>Max: <b>{treeMax(root) ?? "-"}</b></span>
               {extraMetric && <span>{extraMetric}</span>}
             </div>
+
+            {!isMobileViewport && (
+              <button
+                type="button"
+                className="sidebar-toggle-btn canvas-top-btn icon-toggle"
+                aria-label={rightSidebarOpen ? "Hide right sidebar" : "Show right sidebar"}
+                aria-expanded={rightSidebarOpen}
+                onClick={toggleRightSidebar}
+              >
+                <span aria-hidden="true" className="toggle-icon">
+                  {rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+                </span>
+              </button>
+            )}
           </div>
 
-          <div className="canvas-overlay right-sidebar-overlay">
-            <button
-              type="button"
-              className="sidebar-toggle-btn canvas-top-btn icon-toggle"
-              aria-label={rightSidebarOpen ? "Hide right sidebar" : "Show right sidebar"}
-              aria-expanded={rightSidebarOpen}
-              onClick={() => setRightSidebarOpen((value) => !value)}
-            >
-              <span aria-hidden="true" className="toggle-icon">
-                {rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
-              </span>
-            </button>
-          </div>
+          {isMobileViewport && (
+            <>
+              <div className="mobile-fab-rail mobile-fab-rail-left" role="group" aria-label="Traversal and utility actions">
+                {TRAVERSALS.map((option) => (
+                  <button
+                    key={`mobile-${option.key}`}
+                    type="button"
+                    className={`btn mobile-fab-btn mobile-fab-text ${traversal.name === option.label ? "active" : ""}`}
+                    onClick={() => startTraversal(option.label, option.run)}
+                    disabled={isTimelinePlaying}
+                    aria-label={option.label}
+                    title={option.label}
+                  >
+                    {option.label.split("-")[0]}
+                  </button>
+                ))}
 
-          <div className="zoom-controls vertical" role="group" aria-label="Zoom controls">
-            <button
-              type="button"
-              onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
-              aria-label="Zoom in"
-            >
-              <ZoomIn size={14} className="btn-icon" />
-            </button>
-            <span>{Math.round(renderedZoom * 100)}%</span>
-            <button
-              type="button"
-              onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
-              aria-label="Zoom out"
-            >
-              <ZoomOut size={14} className="btn-icon" />
-            </button>
-            <button type="button" onClick={fitCanvas} aria-label="Fit tree to canvas">
-              <Maximize size={14} className="btn-icon" />
-            </button>
-          </div>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={onShowMin}
+                  disabled={isTimelinePlaying}
+                  aria-label="Show minimum"
+                  title="Show minimum"
+                >
+                  <ArrowDownToLine size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={onShowMax}
+                  disabled={isTimelinePlaying}
+                  aria-label="Show maximum"
+                  title="Show maximum"
+                >
+                  <ArrowUpToLine size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={onRandomInsert}
+                  disabled={isTimelinePlaying}
+                  aria-label="Random insert"
+                  title="Random insert"
+                >
+                  <Dices size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={clearSearch}
+                  aria-label="Clear highlight"
+                  title="Clear highlight"
+                >
+                  <Eraser size={16} className="btn-icon" />
+                </button>
+              </div>
+
+              <div className="mobile-fab-rail mobile-fab-rail-right" role="group" aria-label="Tree and replay actions">
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn mobile-fab-btn-positive"
+                  onClick={() => openActionModal("insert")}
+                  disabled={isTimelinePlaying}
+                  aria-label="Insert"
+                  title="Insert"
+                >
+                  <Plus size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn mobile-fab-btn-negative"
+                  onClick={() => openActionModal("delete")}
+                  disabled={isTimelinePlaying}
+                  aria-label="Delete"
+                  title="Delete"
+                >
+                  <Trash2 size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={() => openActionModal("search")}
+                  disabled={isTimelinePlaying}
+                  aria-label="Search"
+                  title="Search"
+                >
+                  <Search size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={onClearAll}
+                  disabled={isTimelinePlaying}
+                  aria-label="Clear all"
+                  title="Clear all"
+                >
+                  <Trash size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                >
+                  <ZoomIn size={16} className="btn-icon" />
+                </button>
+                <div
+                  className="mobile-fab-btn mobile-fab-zoom-readout"
+                  role="status"
+                  aria-label={`Zoom level ${Math.round(renderedZoom * 100)} percent`}
+                >
+                  {Math.round(renderedZoom * 100)}%
+                </div>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                >
+                  <ZoomOut size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={fitCanvas}
+                  aria-label="Fit tree to canvas"
+                  title="Fit tree to canvas"
+                >
+                  <Maximize size={16} className="btn-icon" />
+                </button>
+
+              </div>
+            </>
+          )}
+
+          {!isMobileViewport && (
+            <div className="zoom-controls vertical" role="group" aria-label="Zoom controls">
+              <button
+                type="button"
+                onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
+                aria-label="Zoom in"
+              >
+                <ZoomIn size={14} className="btn-icon" />
+              </button>
+              <span>{Math.round(renderedZoom * 100)}%</span>
+              <button
+                type="button"
+                onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
+                aria-label="Zoom out"
+              >
+                <ZoomOut size={14} className="btn-icon" />
+              </button>
+              <button type="button" onClick={fitCanvas} aria-label="Fit tree to canvas">
+                <Maximize size={14} className="btn-icon" />
+              </button>
+            </div>
+          )}
 
           <div className="canvas-shell">
             {!visualRoot && <div className="empty-state">Tree is empty. Insert a value to start.</div>}
