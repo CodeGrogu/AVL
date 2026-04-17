@@ -2754,7 +2754,30 @@ export default function App() {
   );
   const [sessionsByType, setSessionsByType] = useState(persistedRef.current.sessionsByType);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [useCompactTitle, setUseCompactTitle] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [headerOperationRequest, setHeaderOperationRequest] = useState(null);
+
+  const headerOperationItems = useMemo(() => {
+    const historyItems = sessionsByType?.[treeType]?.operationHistory;
+    if (!Array.isArray(historyItems)) return [];
+    return historyItems.slice(0, 12).map((entry) => ({
+      ...entry,
+      headerText: formatHeaderHistoryEntry(entry),
+    }));
+  }, [sessionsByType, treeType]);
+
+  const handleHeaderOperationSelect = useCallback(
+    (operationId) => {
+      setActiveTab(TYPE_TO_TAB[treeType]);
+      setMobileMenuOpen(false);
+      setHeaderOperationRequest({
+        type: treeType,
+        operationId,
+        nonce: Date.now(),
+      });
+    },
+    [treeType],
+  );
 
   useEffect(() => {
     writePersistedState({
@@ -2929,10 +2952,48 @@ export default function App() {
 
       <main id="maincontent" className="app-shell" tabIndex={-1}>
         <header className="app-header">
-          <div className="app-header-row" ref={headerRowRef}>
-            <div className="app-header-main">
-              <h1 ref={titleRef}>{useCompactTitle ? APP_TITLE_COMPACT : APP_TITLE_FULL}</h1>
-              <div ref={headerSwitcherRef} className="app-header-switcher-wrap">
+          <div className="app-header-row">
+            <h1>{APP_TITLE_COMPACT}</h1>
+
+            {activeTab !== "learn" && (
+              <div className="header-history-marquee" role="navigation" aria-label="Recent operation history">
+                <span className="header-history-label">Recent</span>
+                <div className="header-history-track">
+                  {headerOperationItems.length === 0 ? (
+                    <span className="header-history-empty">No operations yet</span>
+                  ) : (
+                    headerOperationItems.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        className="header-history-item"
+                        onClick={() => handleHeaderOperationSelect(entry.id)}
+                        title={entry.headerText}
+                        aria-label={entry.headerText}
+                      >
+                        {entry.headerText}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+
+
+            <button
+              type="button"
+              className={`app-header-menu-toggle ${mobileMenuOpen ? "active" : ""}`.trim()}
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="app-header-menu"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+
+            <div id="app-header-menu" className={`app-header-menu ${mobileMenuOpen ? "open" : ""}`.trim()}>
+              <div className="app-header-switcher-wrap">
                 <ConceptSwitcher
                   tabs={tabs}
                   activeTab={activeTab}
@@ -2976,6 +3037,7 @@ export default function App() {
               session={sessionsByType[treeType]}
               onSessionChange={updateCurrentSession}
               invertTrackpadPan={settings.invertTrackpadPan}
+              externalOperationRequest={headerOperationRequest}
             />
           </section>
         )}
