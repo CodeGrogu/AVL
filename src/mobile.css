@@ -555,16 +555,6 @@
   }
 
   .history-sidebar {
-    display: flex;
-    flex-direction: column;
-    flex: 0 0 184px;
-    height: 184px;
-    min-height: 184px;
-    max-height: 184px;
-    overflow: hidden;
-  }
-
-  .history-sidebar {
     display: none !important;
   }
 
