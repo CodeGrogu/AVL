@@ -1453,6 +1453,11 @@ function TreeWorkspace({
     return Number.isNaN(value) ? null : value;
   };
 
+  const parseActionModalValue = () => {
+    const value = Number.parseInt(actionModal.value, 10);
+    return Number.isNaN(value) ? null : value;
+  };
+
   const isTimelinePlaying = timelineState.playing;
   const timelineHasFrames = timelineState.frames.length > 0;
 
@@ -1555,6 +1560,64 @@ function TreeWorkspace({
       setError(`${value} not found. Fits between ${pred ?? "-inf"} and ${succ ?? "+inf"}.`);
     }
   };
+
+  const closeActionModal = useCallback(() => {
+    setActionModal({ open: false, type: null, value: "" });
+  }, []);
+
+  const openActionModal = useCallback(
+    (type) => {
+      if (isTimelinePlaying) return;
+      setActionModal({ open: true, type, value: "" });
+    },
+    [isTimelinePlaying],
+  );
+
+  const submitActionModal = useCallback(() => {
+    const value = parseActionModalValue();
+    if (value === null) {
+      setError("Enter an integer first.");
+      return;
+    }
+
+    if (actionModal.type === "insert") {
+      onInsert(value);
+    } else if (actionModal.type === "delete") {
+      onDelete(value);
+    } else if (actionModal.type === "search") {
+      onSearch(value);
+    }
+
+    closeActionModal();
+  }, [actionModal.type, actionModal.value, closeActionModal]);
+
+  useEffect(() => {
+    if (!actionModal.open) return undefined;
+
+    const input = actionModalInputRef.current;
+    if (input) {
+      input.focus();
+      input.select();
+    }
+
+    const onEscape = (event) => {
+      if (event.key === "Escape") {
+        closeActionModal();
+      }
+    };
+
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [actionModal.open, closeActionModal]);
+
+  const actionModalTitle =
+    actionModal.type === "insert"
+      ? "Insert value"
+      : actionModal.type === "delete"
+        ? "Delete value"
+        : "Search value";
 
   const onRandomInsert = () => {
     const allValues = new Set(inOrder(root));
@@ -2235,16 +2298,45 @@ function TreeWorkspace({
           </section>
         </aside>
       </div>
+
+      {actionModal.open && (
+        <div className="modal-backdrop" role="presentation" onClick={closeActionModal}>
+          <section
+            className="action-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="action-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="action-modal-title">{actionModalTitle}</h2>
+            <label htmlFor="action-modal-value" className="input-label">Value</label>
+            <input
+              ref={actionModalInputRef}
+              id="action-modal-value"
+              value={actionModal.value}
+              type="number"
+              inputMode="numeric"
+              enterKeyHint="done"
+              placeholder="integer"
+              onChange={(event) => setActionModal((prev) => ({ ...prev, value: event.target.value }))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitActionModal();
+              }}
+              className="value-input"
+            />
+            <div className="action-modal-actions">
+              <button type="button" className="btn" onClick={closeActionModal}>Cancel</button>
+              <button type="button" className="btn success" onClick={submitActionModal}>Enter</button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }
 
 export default function App() {
   const persistedRef = useRef(readPersistedState());
-  const headerRowRef = useRef(null);
-  const headerSwitcherRef = useRef(null);
-  const settingsBtnRef = useRef(null);
-  const titleRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState(persistedRef.current.app.activeTab);
   const [treeType, setTreeType] = useState(persistedRef.current.app.treeType);

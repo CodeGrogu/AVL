@@ -1428,6 +1428,29 @@ body::-webkit-scrollbar,
   color: #123252;
 }
 
+.action-modal {
+  width: min(92vw, 360px);
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  box-shadow: 0 22px 48px -30px rgba(12, 24, 46, 0.7);
+}
+
+.action-modal h2 {
+  margin: 0;
+  font-size: 1.02rem;
+  color: #1d3555;
+}
+
+.action-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .settings-about {
   margin: 10px 0 14px;
   color: #4b6280;
