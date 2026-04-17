@@ -1030,32 +1030,44 @@ body::-webkit-scrollbar,
 }
 
 .stats-overlay-group {
-  top: var(--overlay-margin);
-  left: var(--overlay-margin);
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--overlay-gap);
-  max-width: calc(100% - (var(--overlay-margin) * 2) - var(--top-overlay-height) - var(--overlay-gap));
+  gap: 8px;
+  padding: 6px var(--overlay-margin);
+  border-bottom: 1px solid rgba(209, 223, 239, 0.7);
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.96), rgba(246, 251, 255, 0.92));
+  z-index: 3;
 }
 
 .stats-overlay {
+  flex: 1 1 auto;
+  width: 100%;
   display: flex;
   flex-wrap: nowrap;
-  gap: 8px;
+  justify-content: center;
+  gap: 10px;
   align-items: center;
+  text-align: center;
+  line-height: 1;
   color: #304b6c;
-  font-size: 0.74rem;
-  border: 1px solid rgba(206, 221, 239, 0.9);
-  background: rgba(255, 255, 255, 0.82);
-  border-radius: 12px;
-  height: var(--top-overlay-height);
-  min-height: var(--top-overlay-height);
-  padding: 7px 12px;
+  font-size: 0.72rem;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
   backdrop-filter: none;
   max-width: 100%;
+}
+
+.stats-overlay span {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .stats-overlay::-webkit-scrollbar {
@@ -1067,10 +1079,7 @@ body::-webkit-scrollbar,
 }
 
 .right-sidebar-overlay {
-  top: var(--overlay-margin);
-  right: var(--overlay-margin);
-  display: flex;
-  align-items: center;
+  display: none;
 }
 
 .legend-toggle,
@@ -1083,8 +1092,8 @@ body::-webkit-scrollbar,
 }
 
 .canvas-top-btn {
-  height: var(--top-overlay-height);
-  min-height: var(--top-overlay-height);
+  height: 34px;
+  min-height: 34px;
   padding: 7px 12px;
   font-size: 0.74rem;
   font-weight: 700;
@@ -1099,8 +1108,8 @@ body::-webkit-scrollbar,
 }
 
 .icon-toggle {
-  width: var(--top-overlay-height);
-  min-width: var(--top-overlay-height);
+  width: 34px;
+  min-width: 34px;
   padding: 0;
 }
 
