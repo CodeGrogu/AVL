@@ -1495,8 +1495,8 @@ function TreeWorkspace({
     return true;
   };
 
-  const onInsert = () => {
-    const value = parseInput();
+  const onInsert = (explicitValue = null) => {
+    const value = explicitValue ?? parseInput();
     if (value === null) return setError("Enter an integer first.");
 
     const changed = runInsert(value, false);
@@ -1505,8 +1505,8 @@ function TreeWorkspace({
     setInput("");
   };
 
-  const onDelete = () => {
-    const value = parseInput();
+  const onDelete = (explicitValue = null) => {
+    const value = explicitValue ?? parseInput();
     if (value === null) return setError("Enter an integer first.");
 
     const beforeRoot = root;
@@ -1541,8 +1541,8 @@ function TreeWorkspace({
     setInput("");
   };
 
-  const onSearch = () => {
-    const value = parseInput();
+  const onSearch = (explicitValue = null) => {
+    const value = explicitValue ?? parseInput();
     if (value === null) return setError("Enter an integer first.");
 
     stopTraversal();
