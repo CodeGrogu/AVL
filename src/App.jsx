@@ -210,6 +210,26 @@ const FRAME_KIND_META = {
 
 const getFrameKindMeta = (kind) => FRAME_KIND_META[kind] ?? { label: "Step", tone: "neutral" };
 
+const formatHeaderHistoryEntry = (entry) => {
+  const frames = Array.isArray(entry?.frames) ? entry.frames : [];
+  const pathValues = frames
+    .filter((frame) => frame?.kind === "visit")
+    .slice(0, 4)
+    .map((frame) => frame.label?.replace(/^Visit\s+/, ""))
+    .filter(Boolean);
+
+  const hasRebalance = frames.some((frame) =>
+    ["rotation", "rotation-result", "case", "color-flip", "color-flip-result", "replace"].includes(frame?.kind),
+  );
+
+  const segments = [entry?.title];
+  if (pathValues.length) segments.push(`path ${pathValues.join("->")}`);
+  if (hasRebalance) segments.push("rebalance");
+  if (frames.length) segments.push(`${frames.length} frames`);
+
+  return segments.filter(Boolean).join(" • ");
+};
+
 const summarizeFrames = (frames, fallback) => {
   for (let idx = frames.length - 1; idx >= 0; idx -= 1) {
     if (frames[idx].explanation) return frames[idx].explanation;
