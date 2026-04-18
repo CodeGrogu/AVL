@@ -25,7 +25,7 @@ import {
 } from "./trees/baseTree";
 import { TREE_CONFIG, TREE_TYPE_ORDER, TAB_TO_TYPE, TYPE_TO_TAB } from "./trees/treeRegistry";
 
-const INITIAL_VALUES = [50, 30, 70, 20, 40, 60, 80, 10, 35, 55, 75];
+const INITIAL_VALUES = [];
 const NODE_RADIUS = 24;
 const STORAGE_KEY = "modular-tree-lab:v2";
 const STORAGE_VERSION = 2;
@@ -1307,14 +1307,21 @@ function TreeWorkspace({
     const svgWidth = canvasRef.current.clientWidth || 760;
     const svgHeight = canvasRef.current.clientHeight || 540;
 
+    // Account for the playback dock overlapping the bottom of the canvas.
+    // The dock is absolutely positioned inside the canvas-stage, so we need to
+    // subtract its footprint from the usable vertical space for centering.
+    const dockEl = canvasRef.current.closest(".canvas-stage")?.querySelector(".playback-dock");
+    const dockReserve = dockEl ? dockEl.offsetHeight + 14 /* overlay-margin gap */ : 0;
+    const usableHeight = svgHeight - dockReserve;
+
     const nextZoom = snapZoomValue(
-      Math.min(1.45, (svgWidth - 24) / currentLayout.width, (svgHeight - 24) / currentLayout.height),
+      Math.min(1.45, (svgWidth - 24) / currentLayout.width, (usableHeight - 24) / currentLayout.height),
     );
 
     setZoom(nextZoom);
     setPan({
       x: Math.max(0, (svgWidth - currentLayout.width * nextZoom) / 2),
-      y: Math.max(14, (svgHeight - currentLayout.height * nextZoom) / 2),
+      y: Math.max(14, (usableHeight - currentLayout.height * nextZoom) / 2),
     });
   }, [currentLayout, snapZoomValue]);
 
@@ -3044,7 +3051,13 @@ function TreeWorkspace({
           )}
 
           <div className="canvas-shell">
-            {!visualRoot && <div className="empty-state">Tree is empty. Insert a value to start.</div>}
+            {!visualRoot && (
+              <div className="empty-state retro-empty-state">
+                <Sprout size={48} className="retro-empty-icon" />
+                <p>The garden is empty.</p>
+                <span>Insert a value to plant the first seed.</span>
+              </div>
+            )}
 
             <svg
               ref={canvasRef}

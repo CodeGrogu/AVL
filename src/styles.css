@@ -1643,6 +1643,37 @@ body::-webkit-scrollbar,
   font-size: 0.88rem;
 }
 
+.retro-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  font-family: "Georgia", "Merriweather", serif;
+}
+
+.retro-empty-icon {
+  color: #a8a29e;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+
+.retro-empty-state p {
+  margin: 0;
+  font-size: 1.4rem;
+  color: #57534e;
+  font-style: italic;
+}
+
+.retro-empty-state span {
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #78716c;
+}
+
 .playback-dock {
   position: absolute;
   left: 50%;
