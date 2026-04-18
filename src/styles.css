@@ -2210,3 +2210,21 @@ body::-webkit-scrollbar,
     margin-left: 0;
   }
 }
+
+@media (max-height: 520px) {
+  .zoom-controls.vertical {
+    flex-direction: row;
+    bottom: calc(var(--overlay-margin) + 108px);
+    right: var(--overlay-margin);
+    min-width: auto;
+  }
+  
+  .zoom-controls.vertical button {
+    width: 36px;
+    min-height: 30px;
+  }
+  
+  .zoom-controls.vertical span {
+    min-width: 44px;
+  }
+}
