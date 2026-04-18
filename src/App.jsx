@@ -482,22 +482,19 @@ const parseMetricText = (text) => {
   return { label, value };
 };
 
-const nodeSignature = (node) => {
-  if (!node) return "#";
-  return `${node.val}:${node.h ?? "-"}:${node.color ?? "-"}|${nodeSignature(node.left)}|${nodeSignature(node.right)}`;
-};
-
+// Lightweight dedup: uses label + focus join instead of O(n) recursive tree signature
 const dedupeFrames = (frames) => {
   const out = [];
-  let prevSig = null;
   let prevLabel = null;
+  let prevFocusKey = null;
 
-  for (const frame of frames) {
-    const sig = nodeSignature(frame.root);
-    if (sig === prevSig && frame.label === prevLabel) continue;
-    out.push({ ...frame });
-    prevSig = sig;
+  for (let i = 0; i < frames.length; i += 1) {
+    const frame = frames[i];
+    const focusKey = frame.focus ? frame.focus.join(",") : "";
+    if (frame.label === prevLabel && focusKey === prevFocusKey) continue;
+    out.push(frame);
     prevLabel = frame.label;
+    prevFocusKey = focusKey;
   }
 
   return out;
@@ -546,130 +543,178 @@ const buildTimeline = ({ beforeRoot, path = [], traceFrames = [], afterRoot, act
   return dedupeFrames(frames);
 };
 
+// Numeric undirected edge key — replaces JSON.stringify/parse with bit-packing.
+// Supports node values up to ~1M which is far beyond our use case.
+const _undirectedKey = (u, v) => (u < v ? u * 1048576 + v : v * 1048576 + u);
+const _unpackKey = (packed) => [packed / 1048576 | 0, packed % 1048576];
+
+// Cached edge endpoint parser to avoid repeated string.split("->") on the same key
+const _edgeEndpointCache = new Map();
+const _parseEdgeKey = (key) => {
+  let cached = _edgeEndpointCache.get(key);
+  if (cached) return cached;
+  const arrowIdx = key.indexOf("->");
+  cached = [+key.slice(0, arrowIdx), +key.slice(arrowIdx + 2)];
+  _edgeEndpointCache.set(key, cached);
+  // Limit cache size to prevent unbounded growth
+  if (_edgeEndpointCache.size > 2000) _edgeEndpointCache.clear();
+  return cached;
+};
+
 const interpolateLayout = (fromLayout, toLayout, progress) => {
   const fromNodeMap = fromLayout?.nodeMap ?? new Map();
   const toNodeMap = toLayout?.nodeMap ?? new Map();
 
-  const nodeIds = new Set([...fromNodeMap.keys(), ...toNodeMap.keys()]);
+  // Build interpolated nodes — iterate both maps without creating an intermediate Set
   const nodeMap = new Map();
+  const nodes = [];
 
-  for (const id of nodeIds) {
-    const from = fromNodeMap.get(id) ?? toNodeMap.get(id);
-    const to = toNodeMap.get(id) ?? fromNodeMap.get(id);
-    const existsBefore = fromNodeMap.has(id);
-    const existsAfter = toNodeMap.has(id);
-
-    const x = from.x + (to.x - from.x) * progress;
-    const y = from.y + (to.y - from.y) * progress;
-    const opacity = existsBefore && existsAfter ? 1 : existsBefore ? 1 - progress : progress;
-
+  for (const [id, from] of fromNodeMap) {
+    const to = toNodeMap.get(id);
+    const target = to ?? from;
+    const x = from.x + (target.x - from.x) * progress;
+    const y = from.y + (target.y - from.y) * progress;
     const meta = {
       value: id,
       x,
       y,
-      opacity,
-      node: toNodeMap.get(id)?.node ?? fromNodeMap.get(id)?.node,
+      opacity: to ? 1 : 1 - progress,
+      node: to?.node ?? from.node,
     };
-
     nodeMap.set(id, meta);
+    nodes.push(meta);
   }
 
-  const getUndirected = (u, v) => JSON.stringify(u < v ? [u, v] : [v, u]);
-  const parseUndirected = (key) => JSON.parse(key);
+  // Add nodes only in toNodeMap (new nodes appearing)
+  for (const [id, to] of toNodeMap) {
+    if (nodeMap.has(id)) continue;
+    const meta = {
+      value: id,
+      x: to.x,
+      y: to.y,
+      opacity: progress,
+      node: to.node,
+    };
+    nodeMap.set(id, meta);
+    nodes.push(meta);
+  }
 
+  // Build undirected edge lookup tables using numeric keys
+  const fromEdges = fromLayout?.edges;
+  const toEdges = toLayout?.edges;
   const fromUndirected = new Map();
-  for (const edge of fromLayout?.edges ?? []) {
-    const [u, v] = edge.key.split("->").map(Number);
-    fromUndirected.set(getUndirected(u, v), edge.key);
+  const fromEdgeEndpoints = [];
+  if (fromEdges) {
+    for (let i = 0; i < fromEdges.length; i += 1) {
+      const edge = fromEdges[i];
+      const ep = _parseEdgeKey(edge.key);
+      const uKey = _undirectedKey(ep[0], ep[1]);
+      fromUndirected.set(uKey, i);
+      fromEdgeEndpoints.push(ep);
+    }
   }
 
   const toUndirected = new Map();
-  for (const edge of toLayout?.edges ?? []) {
-    const [u, v] = edge.key.split("->").map(Number);
-    toUndirected.set(getUndirected(u, v), edge.key);
-  }
-
-  const common = new Set();
-  const broken = new Set();
-  const formed = new Set();
-
-  for (const un of fromUndirected.keys()) {
-    if (toUndirected.has(un)) common.add(un);
-    else broken.add(un);
-  }
-  for (const un of toUndirected.keys()) {
-    if (!fromUndirected.has(un)) formed.add(un);
+  const toEdgeEndpoints = [];
+  if (toEdges) {
+    for (let i = 0; i < toEdges.length; i += 1) {
+      const edge = toEdges[i];
+      const ep = _parseEdgeKey(edge.key);
+      const uKey = _undirectedKey(ep[0], ep[1]);
+      toUndirected.set(uKey, i);
+      toEdgeEndpoints.push(ep);
+    }
   }
 
   const edges = [];
 
-  for (const un of common) {
-    const key = toUndirected.get(un);
-    const [u, v] = key.split("->").map(Number);
-    const source = nodeMap.get(u);
-    const target = nodeMap.get(v);
-    if (source && target) edges.push({ key, from: source, to: target, opacity: 1 });
-  }
-
-  const brokenArray = Array.from(broken);
-  const formedArray = Array.from(formed);
-  const pairedBroken = new Set();
-  const pairedFormed = new Set();
-
-  for (const b of brokenArray) {
-    const [b1, b2] = parseUndirected(b);
-    for (const f of formedArray) {
-      if (pairedFormed.has(f)) continue;
-      const [f1, f2] = parseUndirected(f);
-      
-      const sharedNode = b1 === f1 || b1 === f2 ? b1 : b2 === f1 || b2 === f2 ? b2 : null;
-      if (sharedNode !== null) {
-        pairedBroken.add(b);
-        pairedFormed.add(f);
-        
-        const bOther = b1 === sharedNode ? b2 : b1;
-        const fOther = f1 === sharedNode ? f2 : f1;
-        
-        const pivot = nodeMap.get(sharedNode);
-        const sourceFrom = nodeMap.get(bOther);
-        const sourceTo = nodeMap.get(fOther);
-        
-        if (pivot && sourceFrom && sourceTo) {
-          const dynamicOther = {
-            x: sourceFrom.x + (sourceTo.x - sourceFrom.x) * progress,
-            y: sourceFrom.y + (sourceTo.y - sourceFrom.y) * progress,
-          };
-          
-          const formedKey = toUndirected.get(f);
-          const [fU] = formedKey.split("->").map(Number);
-          
-          if (fU === sharedNode) {
-            edges.push({ key: formedKey, from: pivot, to: dynamicOther, opacity: 1 });
-          } else {
-            edges.push({ key: formedKey, from: dynamicOther, to: pivot, opacity: 1 });
-          }
-        }
-        break;
-      }
+  // Common edges (exist in both)
+  // Broken edges (only in from) — collect indices
+  const brokenIndices = [];
+  for (const [uKey, fromIdx] of fromUndirected) {
+    if (toUndirected.has(uKey)) {
+      // Common edge — use the "to" key direction
+      const toIdx = toUndirected.get(uKey);
+      const ep = toEdgeEndpoints[toIdx];
+      const source = nodeMap.get(ep[0]);
+      const target = nodeMap.get(ep[1]);
+      if (source && target) edges.push({ key: toEdges[toIdx].key, from: source, to: target, opacity: 1 });
+    } else {
+      brokenIndices.push(fromIdx);
     }
   }
 
-  for (const b of brokenArray) {
-    if (pairedBroken.has(b)) continue;
-    const key = fromUndirected.get(b);
-    const [u, v] = key.split("->").map(Number);
-    const source = nodeMap.get(u);
-    const target = nodeMap.get(v);
-    if (source && target) edges.push({ key, from: source, to: target, opacity: 1 - progress });
+  // Formed edges (only in to)
+  const formedIndices = [];
+  for (const [uKey, toIdx] of toUndirected) {
+    if (!fromUndirected.has(uKey)) {
+      formedIndices.push(toIdx);
+    }
   }
 
-  for (const f of formedArray) {
-    if (pairedFormed.has(f)) continue;
-    const key = toUndirected.get(f);
-    const [u, v] = key.split("->").map(Number);
-    const source = nodeMap.get(u);
-    const target = nodeMap.get(v);
-    if (source && target) edges.push({ key, from: source, to: target, opacity: progress });
+  // Pair broken+formed edges that share a node (rotation animation)
+  const pairedBroken = new Uint8Array(brokenIndices.length);
+  const pairedFormed = new Uint8Array(formedIndices.length);
+
+  for (let bi = 0; bi < brokenIndices.length; bi += 1) {
+    const bEp = fromEdgeEndpoints[brokenIndices[bi]];
+    const b1 = bEp[0], b2 = bEp[1];
+
+    for (let fi = 0; fi < formedIndices.length; fi += 1) {
+      if (pairedFormed[fi]) continue;
+      const fEp = toEdgeEndpoints[formedIndices[fi]];
+      const f1 = fEp[0], f2 = fEp[1];
+
+      const sharedNode = b1 === f1 || b1 === f2 ? b1 : b2 === f1 || b2 === f2 ? b2 : -1;
+      if (sharedNode === -1) continue;
+
+      pairedBroken[bi] = 1;
+      pairedFormed[fi] = 1;
+
+      const bOther = b1 === sharedNode ? b2 : b1;
+      const fOther = f1 === sharedNode ? f2 : f1;
+
+      const pivot = nodeMap.get(sharedNode);
+      const sourceFrom = nodeMap.get(bOther);
+      const sourceTo = nodeMap.get(fOther);
+
+      if (pivot && sourceFrom && sourceTo) {
+        const dynamicOther = {
+          x: sourceFrom.x + (sourceTo.x - sourceFrom.x) * progress,
+          y: sourceFrom.y + (sourceTo.y - sourceFrom.y) * progress,
+        };
+
+        const formedEdge = toEdges[formedIndices[fi]];
+        const fKeyEp = toEdgeEndpoints[formedIndices[fi]];
+
+        if (fKeyEp[0] === sharedNode) {
+          edges.push({ key: formedEdge.key, from: pivot, to: dynamicOther, opacity: 1 });
+        } else {
+          edges.push({ key: formedEdge.key, from: dynamicOther, to: pivot, opacity: 1 });
+        }
+      }
+      break;
+    }
+  }
+
+  // Unpaired broken edges (fading out)
+  for (let bi = 0; bi < brokenIndices.length; bi += 1) {
+    if (pairedBroken[bi]) continue;
+    const edge = fromEdges[brokenIndices[bi]];
+    const ep = fromEdgeEndpoints[brokenIndices[bi]];
+    const source = nodeMap.get(ep[0]);
+    const target = nodeMap.get(ep[1]);
+    if (source && target) edges.push({ key: edge.key, from: source, to: target, opacity: 1 - progress });
+  }
+
+  // Unpaired formed edges (fading in)
+  for (let fi = 0; fi < formedIndices.length; fi += 1) {
+    if (pairedFormed[fi]) continue;
+    const edge = toEdges[formedIndices[fi]];
+    const ep = toEdgeEndpoints[formedIndices[fi]];
+    const source = nodeMap.get(ep[0]);
+    const target = nodeMap.get(ep[1]);
+    if (source && target) edges.push({ key: edge.key, from: source, to: target, opacity: progress });
   }
 
   const widthFrom = fromLayout?.width ?? toLayout?.width ?? 0;
@@ -680,7 +725,7 @@ const interpolateLayout = (fromLayout, toLayout, progress) => {
   return {
     width: widthFrom + (widthTo - widthFrom) * progress,
     height: heightFrom + (heightTo - heightFrom) * progress,
-    nodes: [...nodeMap.values()],
+    nodes,
     edges,
   };
 };
