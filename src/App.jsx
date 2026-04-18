@@ -1453,7 +1453,7 @@ function TreeWorkspace({
 
   const loadOperation = (id, autoplay = false) => {
     const entry = operationHistory.find((candidate) => candidate.id === id);
-    if (!entry) return false;
+    if (!entry) return;
 
     stopTraversal();
     clearSearch();
@@ -1464,7 +1464,6 @@ function TreeWorkspace({
       playing: autoplay && entry.frames.length > 1,
     });
     setOk(`Loaded replay: ${entry.title}`);
-    return true;
   };
 
   useEffect(() => {
@@ -1472,10 +1471,11 @@ function TreeWorkspace({
     if (externalOperationRequest.type !== type) return;
     if (externalOperationRequest.nonce === externalOperationNonceRef.current) return;
 
-    const loaded = loadOperation(externalOperationRequest.operationId, false);
-    if (!loaded) return;
+    const operationExists = operationHistory.some((candidate) => candidate.id === externalOperationRequest.operationId);
+    if (!operationExists) return;
 
     externalOperationNonceRef.current = externalOperationRequest.nonce;
+    loadOperation(externalOperationRequest.operationId, false);
 
     if (isMobileViewport) {
       setRightSidebarOpen(true);
