@@ -2241,7 +2241,7 @@ function TreeWorkspace({
           onClick={timelineBack}
           disabled={!timelineHasFrames}
           aria-label="Previous frame"
-          title="Previous frame"
+          {...getHintTriggerProps("Previous frame")}
         >
           <SkipBack size={15} className="btn-icon" />
         </button>
@@ -2251,7 +2251,7 @@ function TreeWorkspace({
           onClick={toggleTimelinePlay}
           disabled={!timelineHasFrames}
           aria-label={timelineState.playing ? "Pause timeline" : "Play timeline"}
-          title={timelineState.playing ? "Pause timeline" : "Play timeline"}
+          {...getHintTriggerProps(timelineState.playing ? "Pause timeline" : "Play timeline")}
         >
           {timelineState.playing ? <Pause size={16} className="btn-icon" /> : <Play size={16} className="btn-icon" />}
         </button>
@@ -2261,7 +2261,7 @@ function TreeWorkspace({
           onClick={timelineNext}
           disabled={!timelineHasFrames}
           aria-label="Next frame"
-          title="Next frame"
+          {...getHintTriggerProps("Next frame")}
         >
           <SkipForward size={15} className="btn-icon" />
         </button>
@@ -2490,7 +2490,7 @@ function TreeWorkspace({
                     onClick={() => startTraversal(option.label, option.run)}
                     disabled={isTimelinePlaying}
                     aria-label={option.label}
-                    title={option.label}
+                    {...getHintTriggerProps(option.label)}
                   >
                     {option.label.split("-")[0]}
                   </button>
@@ -2502,7 +2502,7 @@ function TreeWorkspace({
                   onClick={onShowMin}
                   disabled={isTimelinePlaying}
                   aria-label="Show minimum"
-                  title="Show minimum"
+                  {...getHintTriggerProps("Show minimum")}
                 >
                   <ArrowDownToLine size={16} className="btn-icon" />
                 </button>
@@ -2512,7 +2512,7 @@ function TreeWorkspace({
                   onClick={onShowMax}
                   disabled={isTimelinePlaying}
                   aria-label="Show maximum"
-                  title="Show maximum"
+                  {...getHintTriggerProps("Show maximum")}
                 >
                   <ArrowUpToLine size={16} className="btn-icon" />
                 </button>
@@ -2522,7 +2522,7 @@ function TreeWorkspace({
                   onClick={onRandomInsert}
                   disabled={isTimelinePlaying}
                   aria-label="Random insert"
-                  title="Random insert"
+                  {...getHintTriggerProps("Random insert")}
                 >
                   <Dices size={16} className="btn-icon" />
                 </button>
@@ -2531,7 +2531,7 @@ function TreeWorkspace({
                   className="btn mobile-fab-btn"
                   onClick={clearSearch}
                   aria-label="Clear highlight"
-                  title="Clear highlight"
+                  {...getHintTriggerProps("Clear highlight")}
                 >
                   <Eraser size={16} className="btn-icon" />
                 </button>
@@ -2544,7 +2544,7 @@ function TreeWorkspace({
                   onClick={() => openActionModal("insert")}
                   disabled={isTimelinePlaying}
                   aria-label="Insert"
-                  title="Insert"
+                  {...getHintTriggerProps("Insert")}
                 >
                   <Plus size={16} className="btn-icon" />
                 </button>
@@ -2554,7 +2554,7 @@ function TreeWorkspace({
                   onClick={() => openActionModal("delete")}
                   disabled={isTimelinePlaying}
                   aria-label="Delete"
-                  title="Delete"
+                  {...getHintTriggerProps("Delete")}
                 >
                   <Trash2 size={16} className="btn-icon" />
                 </button>
@@ -2564,7 +2564,7 @@ function TreeWorkspace({
                   onClick={() => openActionModal("search")}
                   disabled={isTimelinePlaying}
                   aria-label="Search"
-                  title="Search"
+                  {...getHintTriggerProps("Search")}
                 >
                   <Search size={16} className="btn-icon" />
                 </button>
@@ -2574,7 +2574,7 @@ function TreeWorkspace({
                   onClick={onClearAll}
                   disabled={isTimelinePlaying}
                   aria-label="Clear all"
-                  title="Clear all"
+                  {...getHintTriggerProps("Clear all")}
                 >
                   <Trash size={16} className="btn-icon" />
                 </button>
@@ -2583,7 +2583,7 @@ function TreeWorkspace({
                   className="btn mobile-fab-btn"
                   onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
                   aria-label="Zoom in"
-                  title="Zoom in"
+                  {...getHintTriggerProps("Zoom in")}
                 >
                   <ZoomIn size={16} className="btn-icon" />
                 </button>
@@ -2599,7 +2599,7 @@ function TreeWorkspace({
                   className="btn mobile-fab-btn"
                   onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
                   aria-label="Zoom out"
-                  title="Zoom out"
+                  {...getHintTriggerProps("Zoom out")}
                 >
                   <ZoomOut size={16} className="btn-icon" />
                 </button>
@@ -2608,7 +2608,7 @@ function TreeWorkspace({
                   className="btn mobile-fab-btn"
                   onClick={fitCanvas}
                   aria-label="Fit tree to canvas"
-                  title="Fit tree to canvas"
+                  {...getHintTriggerProps("Fit tree to canvas")}
                 >
                   <Maximize size={16} className="btn-icon" />
                 </button>
