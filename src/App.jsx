@@ -849,7 +849,12 @@ function TreeWorkspace({
   const hasTypeInitializedRef = useRef(false);
   const restoredTypeRef = useRef(null);
   const speedMenuRef = useRef(null);
+  const replaySidebarRef = useRef(null);
   const actionModalInputRef = useRef(null);
+  const panRef = useRef({ x: 0, y: 0 });
+  const zoomRef = useRef(1);
+  const wheelPanBufferRef = useRef({ x: 0, y: 0 });
+  const wheelPanRafRef = useRef(null);
   const historySignature = useMemo(() => getHistorySignature(history), [history]);
 
   const [transitionState, setTransitionState] = useState(null);
