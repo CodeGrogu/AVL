@@ -1793,21 +1793,6 @@ function TreeWorkspace({
     });
   }, [isMobileViewport]);
 
-  const openMobileRightPanel = useCallback((panel) => {
-    setRightSidebarOpen((current) => {
-      if (isMobileViewport && current && mobileRightPanel === panel) {
-        return false;
-      }
-      return true;
-    });
-
-    setMobileRightPanel(panel);
-
-    if (isMobileViewport) {
-      setLeftSidebarOpen(false);
-    }
-  }, [isMobileViewport, mobileRightPanel]);
-
   const renderPlaybackDock = (extraClassName = "") => (
     <div className={`playback-dock ${extraClassName}`.trim()} role="group" aria-label="Timeline playback controls">
       <div className="timeline-slider-row">
