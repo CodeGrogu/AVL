@@ -334,6 +334,7 @@
   .tree-canvas {
     min-width: 100%;
     min-height: 32dvh;
+    position: relative;
   }
 
   .stats-overlay-group {
@@ -364,13 +365,15 @@
     position: absolute;
     top: var(--mobile-fab-top-offset);
     bottom: var(--mobile-control-bottom-offset);
-    z-index: 12;
+    /* keep below header/status/dock overlays */
+    z-index: 10;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 6px;
     max-height: none;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     overflow-x: visible;
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -389,6 +392,14 @@
   .mobile-fab-rail-right {
     right: var(--canvas-control-inset);
   }
+
+/* Hide replay sidebar entirely in mobile-mode (mobile layout) */
+.workspace-layout.mobile-mode .replay-sidebar,
+.workspace-layout.mobile-mode aside.replay-sidebar {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 
   .mobile-status-pill {
     position: absolute;
