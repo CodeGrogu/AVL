@@ -746,17 +746,29 @@ function NodeTooltip({ hoveredNode, treeType, timelineFrame, frameFocusSet, path
 }
 
 function TimelineSegmentTooltip({ hoveredSegment }) {
-  if (!hoveredSegment?.frame) return null;
+  const hasSegment = Boolean(hoveredSegment?.frame);
+  const frame = hoveredSegment?.frame;
+  const index = hoveredSegment?.index;
+  const total = hoveredSegment?.total;
+  const x = hoveredSegment?.x;
+  const y = hoveredSegment?.y;
+  const anchor = useMemo(() => ({ x, y }), [x, y]);
+  const { tooltipRef, layout } = useTooltipPlacement({
+    anchor,
+    visible: hasSegment,
+    preferredPlacement: "top",
+    offset: 14,
+  });
+  const kindMeta = frame ? getFrameKindMeta(frame.kind) : getFrameKindMeta(null);
 
-  const { frame, index, total, x, y } = hoveredSegment;
-  const kindMeta = getFrameKindMeta(frame.kind);
+  if (!hasSegment || !frame) return null;
 
   return (
     <div
-      className="timeline-segment-tooltip"
-      style={{ left: `${x}px`, top: `${y}px` }}
+      ref={tooltipRef}
+      className={`timeline-segment-tooltip placement-${layout.placement} ${layout.ready ? "is-ready" : "is-measuring"}`}
+      style={{ left: `${layout.left}px`, top: `${layout.top}px`, visibility: layout.ready ? "visible" : "hidden" }}
       role="tooltip"
-      aria-hidden="true"
     >
       <div className="timeline-segment-tooltip-inner">
         <div className="timeline-segment-tooltip-meta">
