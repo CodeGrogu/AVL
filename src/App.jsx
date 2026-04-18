@@ -2894,6 +2894,10 @@ function TreeWorkspace({
                 </button>
 
               </div>
+
+              <span className={`status-pill mobile-status-pill ${message.ok ? "good" : "bad"}`} role="status" aria-live="polite">
+                {message.text}
+              </span>
             </>
           )}
 
@@ -3506,7 +3510,7 @@ export default function App() {
 
       <main id="maincontent" className="app-shell" tabIndex={-1}>
         <header className="app-header">
-          <div className="app-header-row">
+          <div className={`app-header-row ${activeTab === "learn" ? "learn-mode" : ""}`.trim()}>
             <h1>{APP_TITLE_COMPACT}</h1>
 
             {activeTab !== "learn" && (
