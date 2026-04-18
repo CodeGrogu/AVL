@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Trash2, Search, Eraser, ArrowDownToLine, ArrowUpToLine, Dices, Trash,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
-  ChevronDown, ZoomIn, ZoomOut, Maximize, Menu, X, History,
+  ChevronDown, ZoomIn, ZoomOut, Maximize, Menu, X,
   SkipBack, Play, Pause, SkipForward, RotateCcw, SlidersHorizontal
 } from "lucide-react";
 import {
