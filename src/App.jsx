@@ -3761,7 +3761,12 @@ export default function App() {
             aria-labelledby="settings-modal-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="settings-modal-title">Settings</h2>
+            <div className="settings-modal-header">
+              <h2 id="settings-modal-title">Settings</h2>
+              <button type="button" className="retro-close-btn" onClick={() => setSettingsOpen(false)} aria-label="Close settings">
+                <X size={20} />
+              </button>
+            </div>
             <p className="settings-about">
               Explore BST, AVL, and Red-Black trees through interactive operations, traversal highlights, and replayable
               structural timelines.
@@ -3795,7 +3800,6 @@ export default function App() {
                 <span>Enabled</span>
               </label>
             </div>
-            <button type="button" className="btn" onClick={() => setSettingsOpen(false)}>Close</button>
           </section>
         </div>
       )}
