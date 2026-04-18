@@ -3143,6 +3143,26 @@ export default function App() {
     if (tabKey !== "learn" && TAB_TO_TYPE[tabKey] !== treeType) convertTo(TAB_TO_TYPE[tabKey]);
   };
 
+  const showHeaderHint = useCallback((text, clientX, clientY) => {
+    if (!text) return;
+    setHoveredHeaderHint({ text, x: clientX, y: clientY });
+  }, []);
+
+  const hideHeaderHint = useCallback(() => {
+    setHoveredHeaderHint(null);
+  }, []);
+
+  const getHeaderHintTriggerProps = useCallback((text) => ({
+    onMouseEnter: (event) => showHeaderHint(text, event.clientX, event.clientY),
+    onMouseMove: (event) => showHeaderHint(text, event.clientX, event.clientY),
+    onMouseLeave: hideHeaderHint,
+    onFocus: (event) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      showHeaderHint(text, rect.left + rect.width / 2, rect.top);
+    },
+    onBlur: hideHeaderHint,
+  }), [hideHeaderHint, showHeaderHint]);
+
   const tabs = [
     { key: "learn", label: "Concepts" },
     ...TREE_TYPE_ORDER.map((key) => ({ key: TREE_CONFIG[key].tab, label: TREE_CONFIG[key].shortLabel })),
