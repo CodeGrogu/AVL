@@ -217,6 +217,10 @@ const createEmptySession = () => ({
   timelineSpeed: 1,
   zoom: 1,
   pan: { x: 0, y: 0 },
+  ui: {
+    leftSidebarOpen: true,
+    rightSidebarOpen: true,
+  },
   historySignature: "",
 });
 
@@ -247,6 +251,10 @@ const sanitizePersistedSession = (candidate) => {
 
   const panX = Number.isFinite(candidate.pan?.x) ? candidate.pan.x : 0;
   const panY = Number.isFinite(candidate.pan?.y) ? candidate.pan.y : 0;
+  const leftSidebarOpen =
+    typeof candidate.ui?.leftSidebarOpen === "boolean" ? candidate.ui.leftSidebarOpen : true;
+  const rightSidebarOpen =
+    typeof candidate.ui?.rightSidebarOpen === "boolean" ? candidate.ui.rightSidebarOpen : true;
 
   return {
     operationHistory,
@@ -261,6 +269,10 @@ const sanitizePersistedSession = (candidate) => {
       : 1,
     zoom: Number.isFinite(candidate.zoom) ? clamp(candidate.zoom, 0.1, 4) : 1,
     pan: { x: panX, y: panY },
+    ui: {
+      leftSidebarOpen,
+      rightSidebarOpen,
+    },
     historySignature: typeof candidate.historySignature === "string" ? candidate.historySignature : "",
   };
 };
@@ -1526,6 +1538,10 @@ function TreeWorkspace({
         timelineSpeed: 1,
         zoom: 1,
         pan: { x: 0, y: 0 },
+        ui: {
+          leftSidebarOpen: true,
+          rightSidebarOpen: true,
+        },
         historySignature,
       };
     };
@@ -1538,6 +1554,8 @@ function TreeWorkspace({
       setTimelineSpeed(normalized.timelineSpeed);
       setZoom(normalized.zoom);
       setPan(normalized.pan);
+      setLeftSidebarOpen(normalized.ui.leftSidebarOpen);
+      setRightSidebarOpen(normalized.ui.rightSidebarOpen);
     };
 
     const initializeForType = () => {
@@ -1557,6 +1575,7 @@ function TreeWorkspace({
       }
 
       const seed = buildSeedSession();
+      seed.ui = normalized.ui;
       applySession(seed);
       restoredTypeRef.current = type;
 
@@ -1594,9 +1613,21 @@ function TreeWorkspace({
       timelineSpeed,
       zoom: nextZoom,
       pan: nextPan,
+      ui: {
+        leftSidebarOpen,
+        rightSidebarOpen,
+      },
       historySignature,
     };
-  }, [operationHistory, selectedOperationId, timelineState, timelineSpeed, historySignature]);
+  }, [
+    operationHistory,
+    selectedOperationId,
+    timelineState,
+    timelineSpeed,
+    leftSidebarOpen,
+    rightSidebarOpen,
+    historySignature,
+  ]);
 
   useEffect(() => {
     if (!hasTypeInitializedRef.current) return;

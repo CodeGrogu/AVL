@@ -23,6 +23,11 @@
 
 * {
   box-sizing: border-box;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 body {
@@ -61,6 +66,7 @@ body::-webkit-scrollbar,
 
 #root {
   height: 100vh;
+  height: 100dvh;
   padding: 0;
 }
 
@@ -83,6 +89,7 @@ body::-webkit-scrollbar,
 .app-shell {
   margin: 0;
   height: 100%;
+  min-height: 0;
   max-width: none;
   border-radius: 0;
   border: 0;
@@ -506,6 +513,7 @@ body::-webkit-scrollbar,
 .workspace-layout {
   display: grid;
   grid-template-columns: minmax(var(--sidebar-min), var(--sidebar-max)) minmax(0, 1fr) minmax(var(--sidebar-min), var(--sidebar-max));
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   transition: grid-template-columns 0.5s cubic-bezier(0.16, 1, 0.3, 1);
@@ -559,7 +567,8 @@ body::-webkit-scrollbar,
   height: 100%;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .control-sidebar,
@@ -579,6 +588,7 @@ body::-webkit-scrollbar,
 }
 
 .control-sidebar,
+.replay-sidebar,
 .history-list,
 .legend-popover {
   scrollbar-width: none;
@@ -586,6 +596,7 @@ body::-webkit-scrollbar,
 }
 
 .control-sidebar::-webkit-scrollbar,
+.replay-sidebar::-webkit-scrollbar,
 .history-list::-webkit-scrollbar,
 .legend-popover::-webkit-scrollbar {
   width: 0;
