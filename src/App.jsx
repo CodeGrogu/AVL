@@ -1640,18 +1640,12 @@ function TreeWorkspace({
 
   const showTimelineSegmentTooltip = useCallback(
     ({ frame, index, clientX, clientY }) => {
-      const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
-      const tooltipHalfWidth = 176;
-      const safeX = viewportWidth
-        ? clamp(clientX, tooltipHalfWidth, Math.max(tooltipHalfWidth, viewportWidth - tooltipHalfWidth))
-        : clientX;
-
       setHoveredTimelineSegment({
         frame,
         index,
         total: timelineState.frames.length,
-        x: safeX,
-        y: clientY - 8,
+        x: clientX,
+        y: clientY,
       });
     },
     [timelineState.frames.length],
