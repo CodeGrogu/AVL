@@ -17,14 +17,15 @@
 
   #root {
     height: 100vh;
-    height: 100lvh;
+    height: 100dvh;
   }
 
   .app-shell {
     height: 100vh;
-    height: 100lvh;
+    height: 100dvh;
     min-height: 100vh;
-    min-height: 100lvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
     background: linear-gradient(180deg, #f8fbfe 0%, #f2f7fb 100%);
   }
 
@@ -147,12 +148,23 @@
   }
 
   .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     justify-content: stretch;
   }
 
+  .header-actions .header-status-pill {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    border-radius: 10px;
+  }
+
   .header-actions .settings-btn {
-    width: 100%;
-    justify-content: flex-start;
+    width: auto;
+    flex: 0 0 auto;
+    justify-content: center;
     border-radius: 10px;
     border: 1px solid var(--border);
     background: #f8fbff;

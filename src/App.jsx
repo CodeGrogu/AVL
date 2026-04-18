@@ -47,7 +47,9 @@ const TOOLTIP_DEFAULT_OFFSET = 12;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-const resolveVerticalPlacement = ({ preferredPlacement, anchorY, tooltipHeight, offset, viewportHeight }) => {
+const resolveVerticalPlacement = ({ preferredPlacement, anchorY, tooltipHeight, offset, viewportHeight, allowFlip = true }) => {
+  if (!allowFlip) return preferredPlacement;
+
   const topFits = anchorY - offset - tooltipHeight >= TOOLTIP_VIEWPORT_PADDING;
   const bottomFits = anchorY + offset + tooltipHeight <= viewportHeight - TOOLTIP_VIEWPORT_PADDING;
 
@@ -64,7 +66,15 @@ const resolveVerticalPlacement = ({ preferredPlacement, anchorY, tooltipHeight, 
   return bottomSpace > topSpace ? "bottom" : "top";
 };
 
-const computeTooltipLayout = ({ anchorX, anchorY, tooltipWidth, tooltipHeight, preferredPlacement, offset }) => {
+const computeTooltipLayout = ({
+  anchorX,
+  anchorY,
+  tooltipWidth,
+  tooltipHeight,
+  preferredPlacement,
+  offset,
+  allowFlip = true,
+}) => {
   const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
   const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 0;
 
@@ -74,6 +84,7 @@ const computeTooltipLayout = ({ anchorX, anchorY, tooltipWidth, tooltipHeight, p
     tooltipHeight,
     offset,
     viewportHeight,
+    allowFlip,
   });
 
   const minLeft = TOOLTIP_VIEWPORT_PADDING;
@@ -91,7 +102,13 @@ const computeTooltipLayout = ({ anchorX, anchorY, tooltipWidth, tooltipHeight, p
   return { left, top, placement };
 };
 
-function useTooltipPlacement({ anchor, visible, preferredPlacement = "top", offset = TOOLTIP_DEFAULT_OFFSET }) {
+function useTooltipPlacement({
+  anchor,
+  visible,
+  preferredPlacement = "top",
+  offset = TOOLTIP_DEFAULT_OFFSET,
+  allowFlip = true,
+}) {
   const tooltipRef = useRef(null);
   const [viewportTick, setViewportTick] = useState(0);
   const [layout, setLayout] = useState({ left: 0, top: 0, placement: preferredPlacement, ready: false });
@@ -110,10 +127,11 @@ function useTooltipPlacement({ anchor, visible, preferredPlacement = "top", offs
       tooltipHeight: rect.height,
       preferredPlacement,
       offset,
+      allowFlip,
     });
 
     setLayout({ ...next, ready: true });
-  }, [visible, anchor, preferredPlacement, offset, viewportTick]);
+  }, [visible, anchor, preferredPlacement, offset, allowFlip, viewportTick]);
 
   useEffect(() => {
     if (!visible || typeof window === "undefined") return undefined;
@@ -394,6 +412,73 @@ const summarizeFrames = (frames, fallback) => {
     if (frames[idx].explanation) return frames[idx].explanation;
   }
   return fallback;
+};
+
+const resolveStatsLabelMode = (width) => {
+  if (!Number.isFinite(width)) return "full";
+  if (width <= 320) return "tiny";
+  if (width <= 520) return "short";
+  return "full";
+};
+
+const getShortMetricLabel = (label) => {
+  switch (label) {
+    case "Nodes":
+      return "N";
+    case "Leaves":
+      return "Lf";
+    case "Internal":
+      return "In";
+    case "Height":
+      return "H";
+    case "Min":
+      return "Min";
+    case "Max":
+      return "Max";
+    case "Root BF":
+      return "BF";
+    case "Black-height":
+      return "BH";
+    default:
+      return label;
+  }
+};
+
+const getTinyMetricLabel = (label) => {
+  switch (label) {
+    case "Nodes":
+      return "N";
+    case "Leaves":
+      return "L";
+    case "Internal":
+      return "I";
+    case "Height":
+      return "H";
+    case "Min":
+      return "Mn";
+    case "Max":
+      return "Mx";
+    case "Root BF":
+      return "BF";
+    case "Black-height":
+      return "BH";
+    default:
+      return getShortMetricLabel(label);
+  }
+};
+
+const parseMetricText = (text) => {
+  if (!text || typeof text !== "string") return null;
+  const separatorIndex = text.indexOf(":");
+  if (separatorIndex === -1) {
+    const trimmed = text.trim();
+    return trimmed ? { label: trimmed, value: "" } : null;
+  }
+
+  const label = text.slice(0, separatorIndex).trim();
+  const value = text.slice(separatorIndex + 1).trim();
+  if (!label) return null;
+  return { label, value };
 };
 
 const nodeSignature = (node) => {
@@ -810,6 +895,7 @@ function HintTooltip({ hoveredHint }) {
     visible: hasHint,
     preferredPlacement: "top",
     offset: TOOLTIP_DEFAULT_OFFSET,
+    allowFlip: false,
   });
 
   if (!hasHint || !anchor) return null;
@@ -962,6 +1048,7 @@ function TreeWorkspace({
   onSessionChange,
   invertTrackpadPan,
   externalOperationRequest,
+  onStatusMessageChange,
 }) {
   const config = TREE_CONFIG[type];
 
@@ -990,6 +1077,7 @@ function TreeWorkspace({
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [statsLabelMode, setStatsLabelMode] = useState("full");
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [hoveredNode, setHoveredNode] = useState(null);
@@ -1022,6 +1110,7 @@ function TreeWorkspace({
   const restoredTypeRef = useRef(null);
   const speedMenuRef = useRef(null);
   const replaySidebarRef = useRef(null);
+  const statsOverlayRef = useRef(null);
   const actionModalInputRef = useRef(null);
   const actionModalRef = useRef(null);
   const actionModalShiftRef = useRef(0);
@@ -1043,8 +1132,42 @@ function TreeWorkspace({
   const renderedPan = pan;
 
   useEffect(() => {
+    onStatusMessageChange?.(type, message);
+  }, [onStatusMessageChange, type, message]);
+
+  useEffect(() => {
     panRef.current = pan;
   }, [pan]);
+
+  useEffect(() => {
+    const overlay = statsOverlayRef.current;
+    if (!overlay || typeof window === "undefined") return undefined;
+
+    const updateLabelMode = () => {
+      const width = overlay.getBoundingClientRect().width;
+      setStatsLabelMode((current) => {
+        const next = resolveStatsLabelMode(width);
+        return current === next ? current : next;
+      });
+    };
+
+    updateLabelMode();
+
+    let observer;
+    window.addEventListener("resize", updateLabelMode);
+
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(updateLabelMode);
+      observer.observe(overlay);
+    }
+
+    return () => {
+      window.removeEventListener("resize", updateLabelMode);
+      if (observer) {
+        observer.disconnect();
+      }
+    };
+  }, [isMobileViewport, leftSidebarOpen, rightSidebarOpen]);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -1717,8 +1840,18 @@ function TreeWorkspace({
     setHoveredTimelineSegment(null);
   }, []);
 
-  const showHintTooltip = useCallback((text, clientX, clientY) => {
+  const showHintTooltip = useCallback((text, clientX, clientY, anchorElement) => {
     if (!text) return;
+    if (anchorElement?.getBoundingClientRect) {
+      const rect = anchorElement.getBoundingClientRect();
+      setHoveredHint({
+        text,
+        x: rect.left + rect.width / 2,
+        y: rect.top,
+      });
+      return;
+    }
+
     setHoveredHint({ text, x: clientX, y: clientY });
   }, []);
 
@@ -1727,12 +1860,12 @@ function TreeWorkspace({
   }, []);
 
   const getHintTriggerProps = useCallback((text) => ({
-    onMouseEnter: (event) => showHintTooltip(text, event.clientX, event.clientY),
-    onMouseMove: (event) => showHintTooltip(text, event.clientX, event.clientY),
+    onMouseEnter: (event) => showHintTooltip(text, event.clientX, event.clientY, event.currentTarget),
+    onMouseMove: (event) => showHintTooltip(text, event.clientX, event.clientY, event.currentTarget),
     onMouseLeave: hideHintTooltip,
     onFocus: (event) => {
       const rect = event.currentTarget.getBoundingClientRect();
-      showHintTooltip(text, rect.left + rect.width / 2, rect.top);
+      showHintTooltip(text, rect.left + rect.width / 2, rect.top, event.currentTarget);
     },
     onBlur: hideHintTooltip,
   }), [hideHintTooltip, showHintTooltip]);
@@ -2455,6 +2588,16 @@ function TreeWorkspace({
   };
 
   const extraMetric = config.extraMetric(root);
+  const parsedExtraMetric = parseMetricText(extraMetric);
+  const statsMetrics = [
+    { key: "nodes", label: "Nodes", value: treeSize(root) },
+    { key: "leaves", label: "Leaves", value: treeLeavesCount(root) },
+    { key: "internal", label: "Internal", value: treeInternalNodesCount(root) },
+    { key: "height", label: "Height", value: treeHeight(root) },
+    { key: "min", label: "Min", value: treeMin(root) ?? "-" },
+    { key: "max", label: "Max", value: treeMax(root) ?? "-" },
+    ...(parsedExtraMetric ? [{ key: "extra", label: parsedExtraMetric.label, value: parsedExtraMetric.value }] : []),
+  ];
   const showHistorySection = !isMobileViewport;
   const workspaceLayoutClassName = isMobileViewport
     ? "workspace-layout mobile-mode"
@@ -2574,14 +2717,31 @@ function TreeWorkspace({
               </button>
             )}
 
-            <div className="stats-overlay" aria-label="Tree statistics">
-              <span>Nodes: <b>{treeSize(root)}</b></span>
-              <span>Leaves: <b>{treeLeavesCount(root)}</b></span>
-              <span>Internal: <b>{treeInternalNodesCount(root)}</b></span>
-              <span>Height: <b>{treeHeight(root)}</b></span>
-              <span>Min: <b>{treeMin(root) ?? "-"}</b></span>
-              <span>Max: <b>{treeMax(root) ?? "-"}</b></span>
-              {extraMetric && <span>{extraMetric}</span>}
+            <div
+              ref={statsOverlayRef}
+              className="stats-overlay"
+              data-label-mode={statsLabelMode}
+              aria-label="Tree statistics"
+            >
+              {statsMetrics.map((metric) => {
+                const fullLabel = metric.label;
+                const label =
+                  statsLabelMode === "tiny"
+                    ? getTinyMetricLabel(fullLabel)
+                    : statsLabelMode === "short"
+                      ? getShortMetricLabel(fullLabel)
+                      : fullLabel;
+
+                const value = metric.value === undefined || metric.value === "" ? "-" : metric.value;
+                const ariaLabel = `${fullLabel}: ${value}`;
+
+                return (
+                  <span key={metric.key} className="stats-item" aria-label={ariaLabel}>
+                    <span className="stats-label">{label}:</span>
+                    <b>{value}</b>
+                  </span>
+                );
+              })}
             </div>
 
             {!isMobileViewport && (
@@ -2971,7 +3131,6 @@ function TreeWorkspace({
         </section>
 
         <aside className={`replay-sidebar ${rightSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Timeline and operation history">
-          <span className={`status-pill ${message.ok ? "good" : "bad"}`}>{message.text}</span>
 
           <section
             className="sidebar-section timeline-details"
@@ -3085,6 +3244,13 @@ function TreeWorkspace({
 export default function App() {
   const persistedRef = useRef(readPersistedState());
 
+  const [headerStatusByType, setHeaderStatusByType] = useState(() =>
+    TREE_TYPE_ORDER.reduce((acc, type) => {
+      acc[type] = { ok: true, text: `${TREE_CONFIG[type].shortLabel} ready.` };
+      return acc;
+    }, {}),
+  );
+
   const [activeTab, setActiveTab] = useState(persistedRef.current.app.activeTab);
   const [treeType, setTreeType] = useState(persistedRef.current.app.treeType);
   const [history, setHistory] = useState(persistedRef.current.app.history);
@@ -3142,6 +3308,32 @@ export default function App() {
     },
     [treeType],
   );
+
+  const handleWorkspaceStatusChange = useCallback((type, status) => {
+    if (!TREE_CONFIG[type] || !status || typeof status.text !== "string") return;
+
+    const nextStatus = {
+      ok: Boolean(status.ok),
+      text: status.text,
+    };
+
+    setHeaderStatusByType((prev) => {
+      const current = prev[type];
+      if (current && current.ok === nextStatus.ok && current.text === nextStatus.text) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [type]: nextStatus,
+      };
+    });
+  }, []);
+
+  const activeHeaderStatus =
+    activeTab !== "learn" && headerStatusByType[treeType]
+      ? headerStatusByType[treeType]
+      : null;
 
   const replaySessionForType = useCallback((sourceSession, nextType) => {
     const source = sanitizePersistedSession(sourceSession);
@@ -3364,6 +3556,15 @@ export default function App() {
                 />
               </div>
               <div className="header-actions">
+                {activeHeaderStatus && (
+                  <span
+                    className={`status-pill header-status-pill ${activeHeaderStatus.ok ? "good" : "bad"}`}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {activeHeaderStatus.text}
+                  </span>
+                )}
                 <button
                   type="button"
                   className="settings-btn"
@@ -3399,6 +3600,7 @@ export default function App() {
               onSessionChange={updateCurrentSession}
               invertTrackpadPan={settings.invertTrackpadPan}
               externalOperationRequest={headerOperationRequest}
+              onStatusMessageChange={handleWorkspaceStatusChange}
             />
           </section>
         )}
