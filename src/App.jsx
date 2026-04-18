@@ -2969,6 +2969,7 @@ export default function App() {
   const [sessionsByType, setSessionsByType] = useState(persistedRef.current.sessionsByType);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [hoveredHeaderHint, setHoveredHeaderHint] = useState(null);
   const [headerOperationRequest, setHeaderOperationRequest] = useState(null);
 
   const headerOperationItems = useMemo(() => {
