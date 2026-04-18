@@ -1630,7 +1630,7 @@ function TreeWorkspace({
     [isTimelinePlaying],
   );
 
-  const submitActionModal = () => {
+  const submitActionModal = useCallback(() => {
     const value = parseActionModalValue();
     if (value === null) {
       setError("Enter an integer first.");
@@ -1646,7 +1646,15 @@ function TreeWorkspace({
     }
 
     closeActionModal();
-  };
+  }, [
+    actionModal.type,
+    actionModal.value,
+    closeActionModal,
+    onInsert,
+    onDelete,
+    onSearch,
+    parseActionModalValue,
+  ]);
 
   useEffect(() => {
     if (!actionModal.open) return undefined;
@@ -2073,7 +2081,6 @@ function TreeWorkspace({
   };
 
   const extraMetric = config.extraMetric(root);
-  const showTimelineSection = true;
   const showHistorySection = !isMobileViewport;
   const workspaceLayoutClassName = isMobileViewport
     ? "workspace-layout mobile-mode"
@@ -2594,7 +2601,6 @@ function TreeWorkspace({
 
           <section
             className="sidebar-section timeline-details"
-            hidden={!showTimelineSection}
             style={isMobileViewport ? { display: "none" } : undefined}
           >
             <div className="section-heading-row">
@@ -2615,7 +2621,7 @@ function TreeWorkspace({
             <p className="frame-explanation">{frameExplanation}</p>
           </section>
 
-          {isMobileViewport && showTimelineSection && renderPlaybackDock("playback-dock-inline")}
+          {isMobileViewport && renderPlaybackDock("playback-dock-inline")}
 
           <section
             className="sidebar-section history-sidebar"
