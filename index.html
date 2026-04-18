@@ -1,13 +1,54 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <title>AVL Visualizer</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <meta name="description"
+    content="What is an AVL tree? An AVL tree is a self-balancing binary search tree where the heights of the two child subtrees of any node differ by at most one. I built this interactive visualizer to help you learn algorithm structures." />
+  <title>AVL & Red-Black Tree Visualizer | Interactive Binary Tree Lab</title>
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Modular Binary Tree Lab",
+      "description": "An interactive educational visualizer for AVL and Red-Black trees, providing step-by-step trace animations of self-balancing algorithms.",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "All",
+      "author": {
+        "@type": "Person",
+        "name": "Jaden Awaseb",
+        "url": "https://github.com/codegrogu"
+      }
+    }
+    </script>
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [{
+        "@type": "Question",
+        "name": "What is an AVL tree?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "An AVL tree is a self-balancing binary search tree where the height difference between left and right subtrees is at most one. It uses rotations to maintain strict balance."
+        }
+      }, {
+        "@type": "Question",
+        "name": "How does a Red-Black tree work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Red-Black trees use node color rules (red and black) instead of explicit height factors to keep tree height logarithmic, requiring fewer rotations on average during mixed workloads."
+        }
+      }]
+    }
+    </script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
 </html>
