@@ -2024,44 +2024,6 @@ function TreeWorkspace({
     };
   }, []);
 
-  useEffect(() => {
-    if (!isMobileViewport || !rightSidebarOpen) {
-      setMobileOverlayHeight(0);
-      return undefined;
-    }
-
-    const sidebar = replaySidebarRef.current;
-    if (!sidebar) {
-      setMobileOverlayHeight(0);
-      return undefined;
-    }
-
-    const updateOverlayHeight = () => {
-      const rect = sidebar.getBoundingClientRect();
-      setMobileOverlayHeight(Math.max(0, Math.ceil(rect.height)));
-    };
-
-    updateOverlayHeight();
-
-    let observer;
-    if (typeof ResizeObserver !== "undefined") {
-      observer = new ResizeObserver(updateOverlayHeight);
-      observer.observe(sidebar);
-    }
-
-    window.addEventListener("resize", updateOverlayHeight);
-
-    return () => {
-      window.removeEventListener("resize", updateOverlayHeight);
-      if (observer) observer.disconnect();
-    };
-  }, [isMobileViewport, rightSidebarOpen, mobileRightPanel]);
-
-  const workspaceStyle =
-    isMobileViewport && rightSidebarOpen
-      ? { "--replay-overlay-height": `${mobileOverlayHeight}px` }
-      : undefined;
-
   const typeLegend =
     type === "AVL"
       ? [
