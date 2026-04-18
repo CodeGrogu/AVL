@@ -958,68 +958,69 @@ function HintTooltip({ hoveredHint }) {
   );
 }
 
-function LearnPanel() {
-  const cards = [
-    {
-      id: "bst",
-      title: "Shared BST Base",
-      intro:
-        "Every tree mode in this lab starts from the same binary-search-tree contract: each node has one value, a left child for smaller values, and a right child for larger values.",
-      how: [
-        "Insert walks the search path until an empty slot is found.",
-        "Delete handles leaf removal, single-child bypass, or in-order successor replacement.",
-      ],
-      why: [
-        "Keeps behavior consistent across BST, AVL, and Red-Black modes.",
-        "Algorithm differences are easier to compare when balancing logic is layered.",
-      ],
-    },
-    {
-      id: "avl",
-      title: "AVL Layer",
-      intro:
-        "AVL augments each node with height metadata and restores strict balance after updates so lookups stay predictably fast.",
-      how: [
-        "Subtree heights are recalculated bottom-up after each update.",
-        "Balance factor (left minus right height) is strictly maintained.",
-        "Imbalances are fixed using single or double rotations (LL, RR, LR, RL).",
-      ],
-      why: [
-        "Maintains tighter balance than Red-Black, improving lookup consistency.",
-        "The timeline highlights precisely where and why each rotation happens.",
-      ],
-    },
-    {
-      id: "rb",
-      title: "Red-Black Layer",
-      intro:
-        "Red-Black trees use node color rules instead of explicit height factors to keep tree height logarithmic with fewer rotations on average.",
-      how: [
-        "Insertions begin with a red node; fix-up rules resolve violations through recolors and rotations.",
-        "Enforces invariants: black root, no adjacent red nodes, equal black height paths.",
-      ],
-      why: [
-        "Often performs fewer rebalances during mixed insert/delete workloads.",
-        "Case-by-case trace frames make color flips easy to follow.",
-      ],
-    },
-    {
-      id: "timeline",
-      title: "Animation & Replay",
-      intro:
-        "Each structural operation is captured as an ordered frame sequence so you can inspect state transitions instead of only final results.",
-      how: [
-        "The scrubber maps one-to-one to recorded frames.",
-        "Play/Pause, Prev/Next, and Replay let you inspect quickly or frame-by-frame.",
-        "Operation history stores prior traces to replay specific inserts/deletes later.",
-      ],
-      why: [
-        "Replay-first interaction turns balancing into a debuggable process.",
-        "You can visually compare identical value sequences across the different tree variants.",
-      ],
-    },
-  ];
+// Static learn panel content — hoisted to module scope to avoid re-creating on every render
+const LEARN_CARDS = [
+  {
+    id: "bst",
+    title: "Shared BST Base",
+    intro:
+      "Every tree mode in this lab starts from the same binary-search-tree contract: each node has one value, a left child for smaller values, and a right child for larger values.",
+    how: [
+      "Insert walks the search path until an empty slot is found.",
+      "Delete handles leaf removal, single-child bypass, or in-order successor replacement.",
+    ],
+    why: [
+      "Keeps behavior consistent across BST, AVL, and Red-Black modes.",
+      "Algorithm differences are easier to compare when balancing logic is layered.",
+    ],
+  },
+  {
+    id: "avl",
+    title: "AVL Layer",
+    intro:
+      "AVL augments each node with height metadata and restores strict balance after updates so lookups stay predictably fast.",
+    how: [
+      "Subtree heights are recalculated bottom-up after each update.",
+      "Balance factor (left minus right height) is strictly maintained.",
+      "Imbalances are fixed using single or double rotations (LL, RR, LR, RL).",
+    ],
+    why: [
+      "Maintains tighter balance than Red-Black, improving lookup consistency.",
+      "The timeline highlights precisely where and why each rotation happens.",
+    ],
+  },
+  {
+    id: "rb",
+    title: "Red-Black Layer",
+    intro:
+      "Red-Black trees use node color rules instead of explicit height factors to keep tree height logarithmic with fewer rotations on average.",
+    how: [
+      "Insertions begin with a red node; fix-up rules resolve violations through recolors and rotations.",
+      "Enforces invariants: black root, no adjacent red nodes, equal black height paths.",
+    ],
+    why: [
+      "Often performs fewer rebalances during mixed insert/delete workloads.",
+      "Case-by-case trace frames make color flips easy to follow.",
+    ],
+  },
+  {
+    id: "timeline",
+    title: "Animation & Replay",
+    intro:
+      "Each structural operation is captured as an ordered frame sequence so you can inspect state transitions instead of only final results.",
+    how: [
+      "The scrubber maps one-to-one to recorded frames.",
+      "Play/Pause, Prev/Next, and Replay let you inspect quickly or frame-by-frame.",
+      "Operation history stores prior traces to replay specific inserts/deletes later.",
+    ],
+    why: [
+      "Replay-first interaction turns balancing into a debuggable process.",
+      "You can visually compare identical value sequences across the different tree variants.",
+    ],
+  },
+];
 
+function LearnPanel() {
   return (
     <div className="learn-container">
       <header className="learn-header">
@@ -1027,7 +1028,7 @@ function LearnPanel() {
         <p>Understand the foundational mechanics and architectural differences behind tree variants.</p>
       </header>
       <section className="learn-grid">
-        {cards.map((card, index) => (
+        {LEARN_CARDS.map((card, index) => (
           <article key={card.title} className={`learn-card theme-${card.id}`}>
             <div className="card-glass-layer" />
             <div className="card-content">
@@ -2252,12 +2253,23 @@ function TreeWorkspace({
         : "Search value";
 
   const onRandomInsert = () => {
-    const allValues = new Set(inOrder(root));
-    if (allValues.size >= 199) return setError("All values from 1 to 199 already exist.");
+    // Use already-tracked history Set instead of doing a full inOrder traversal
+    const existingCount = history.length;
+    if (existingCount >= 999) return setError("All values from 1 to 999 already exist.");
 
+    // Quick random with searchPath-based O(log n) collision check
     let value;
-    do value = Math.floor(Math.random() * 199) + 1;
-    while (allValues.has(value));
+    let attempts = 0;
+    do {
+      value = Math.floor(Math.random() * 999) + 1;
+      attempts += 1;
+      // Fallback to set-based approach if too many collisions (dense tree)
+      if (attempts > 20) {
+        const existing = new Set(history);
+        do { value = Math.floor(Math.random() * 999) + 1; } while (existing.has(value));
+        break;
+      }
+    } while (searchPath(root, value).found);
 
     runInsert(value, true);
   };
