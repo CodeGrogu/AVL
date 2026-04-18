@@ -51,6 +51,51 @@ const getTouchCenter = (first, second) => ({
   y: (first.clientY + second.clientY) / 2,
 });
 
+const WHEEL_DELTA_MODE_LINE = 1;
+const WHEEL_DELTA_MODE_PAGE = 2;
+const WHEEL_LINE_SIZE = 16;
+const WHEEL_PAGE_SIZE = 100;
+const WHEEL_DEAD_ZONE = 0.15;
+const TRACKPAD_PAN_DELTA_LIMIT = 80;
+const PINCH_ZOOM_DELTA_LIMIT = 12;
+const MOUSE_WHEEL_ZOOM_DELTA_LIMIT = 90;
+const PINCH_ZOOM_SENSITIVITY = 0.01;
+const MOUSE_WHEEL_ZOOM_SENSITIVITY = 0.0015;
+
+const normalizeWheelDeltas = (event) => {
+  if (event.deltaMode === WHEEL_DELTA_MODE_LINE) {
+    return {
+      deltaX: event.deltaX * WHEEL_LINE_SIZE,
+      deltaY: event.deltaY * WHEEL_LINE_SIZE,
+    };
+  }
+
+  if (event.deltaMode === WHEEL_DELTA_MODE_PAGE) {
+    return {
+      deltaX: event.deltaX * WHEEL_PAGE_SIZE,
+      deltaY: event.deltaY * WHEEL_PAGE_SIZE,
+    };
+  }
+
+  return {
+    deltaX: event.deltaX,
+    deltaY: event.deltaY,
+  };
+};
+
+const isLikelyMouseWheel = (event, normalizedDeltaX, normalizedDeltaY) => {
+  if (event.deltaMode !== 0) return true;
+
+  const absX = Math.abs(normalizedDeltaX);
+  const absY = Math.abs(normalizedDeltaY);
+
+  if (absX > 0.1) return false;
+  if (absY <= 15) return false;
+  if (absY >= 40) return true;
+
+  return Number.isInteger(normalizedDeltaY) && absY >= 16;
+};
+
 const getHistorySignature = (values) => values.join("|");
 
 const cloneFrame = (frame) => ({
@@ -808,13 +853,15 @@ function TreeWorkspace({
   const speedMenuRef = useRef(null);
   const replaySidebarRef = useRef(null);
   const actionModalInputRef = useRef(null);
+  const wheelPanBufferRef = useRef({ x: 0, y: 0 });
+  const wheelPanRafRef = useRef(null);
   const historySignature = useMemo(() => getHistorySignature(history), [history]);
 
   const [transitionState, setTransitionState] = useState(null);
 
   const snapZoomValue = useCallback((value) => {
     const bounded = clamp(value, 0.1, 4);
-    return parseFloat((Math.round(bounded * 20) / 20).toFixed(2));
+    return parseFloat(bounded.toFixed(4));
   }, []);
 
   const renderedZoom = useMemo(() => snapZoomValue(zoom), [zoom, snapZoomValue]);
@@ -872,48 +919,83 @@ function TreeWorkspace({
     });
   }, [currentLayout, snapZoomValue]);
 
+  const applyZoomAroundPointer = useCallback((pointerX, pointerY, deltaY, sensitivity) => {
+    setZoom((currentZoom) => {
+      const zoomFactor = Math.exp(-deltaY * sensitivity);
+      const nextZoom = snapZoomValue(currentZoom * zoomFactor);
+
+      setPan((currentPan) => {
+        const worldX = (pointerX - currentPan.x) / currentZoom;
+        const worldY = (pointerY - currentPan.y) / currentZoom;
+
+        return {
+          x: pointerX - worldX * nextZoom,
+          y: pointerY - worldY * nextZoom,
+        };
+      });
+
+      return nextZoom;
+    });
+  }, [snapZoomValue]);
+
+  const flushWheelPanBuffer = useCallback(() => {
+    const { x, y } = wheelPanBufferRef.current;
+    wheelPanBufferRef.current = { x: 0, y: 0 };
+    wheelPanRafRef.current = null;
+
+    if (Math.abs(x) <= WHEEL_DEAD_ZONE && Math.abs(y) <= WHEEL_DEAD_ZONE) return;
+
+    setPan((currentPan) => ({
+      x: currentPan.x + x,
+      y: currentPan.y + y,
+    }));
+  }, []);
+
   const handleCanvasWheel = useCallback((event) => {
     event.preventDefault();
 
+    const { deltaX, deltaY } = normalizeWheelDeltas(event);
+    if (Math.abs(deltaX) <= WHEEL_DEAD_ZONE && Math.abs(deltaY) <= WHEEL_DEAD_ZONE) return;
+
     const isPinchGesture = event.ctrlKey || event.metaKey;
+    const svg = canvasRef.current;
+    if (!svg) return;
+
+    const rect = svg.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
 
     if (isPinchGesture) {
-      const svg = canvasRef.current;
-      if (!svg) return;
+      const clampedPinchDelta = clamp(deltaY, -PINCH_ZOOM_DELTA_LIMIT, PINCH_ZOOM_DELTA_LIMIT);
+      if (Math.abs(clampedPinchDelta) <= WHEEL_DEAD_ZONE) return;
 
-      const rect = svg.getBoundingClientRect();
-      const pointerX = event.clientX - rect.left;
-      const pointerY = event.clientY - rect.top;
+      applyZoomAroundPointer(pointerX, pointerY, clampedPinchDelta, PINCH_ZOOM_SENSITIVITY);
 
-      setZoom((currentZoom) => {
-        const zoomFactor = event.deltaY < 0 ? 1.08 : 0.92;
-        const nextZoom = snapZoomValue(currentZoom * zoomFactor);
+      return;
+    }
 
-        setPan((currentPan) => {
-          const worldX = (pointerX - currentPan.x) / currentZoom;
-          const worldY = (pointerY - currentPan.y) / currentZoom;
+    const usingMouseWheel = isLikelyMouseWheel(event, deltaX, deltaY);
 
-          return {
-            x: pointerX - worldX * nextZoom,
-            y: pointerY - worldY * nextZoom,
-          };
-        });
+    if (usingMouseWheel) {
+      const clampedWheelDelta = clamp(deltaY, -MOUSE_WHEEL_ZOOM_DELTA_LIMIT, MOUSE_WHEEL_ZOOM_DELTA_LIMIT);
+      if (Math.abs(clampedWheelDelta) <= WHEEL_DEAD_ZONE) return;
 
-        return nextZoom;
-      });
-
+      applyZoomAroundPointer(pointerX, pointerY, clampedWheelDelta, MOUSE_WHEEL_ZOOM_SENSITIVITY);
       return;
     }
 
     const panDirection = invertTrackpadPan ? -1 : 1;
 
-    setPan((currentPan) =>
-      ({
-        x: currentPan.x + event.deltaX * panDirection,
-        y: currentPan.y + event.deltaY * panDirection,
-      }),
-    );
-  }, [invertTrackpadPan, snapZoomValue]);
+    wheelPanBufferRef.current.x += clamp(deltaX, -TRACKPAD_PAN_DELTA_LIMIT, TRACKPAD_PAN_DELTA_LIMIT) * panDirection;
+    wheelPanBufferRef.current.y += clamp(deltaY, -TRACKPAD_PAN_DELTA_LIMIT, TRACKPAD_PAN_DELTA_LIMIT) * panDirection;
+
+    if (wheelPanRafRef.current !== null) return;
+
+    wheelPanRafRef.current = requestAnimationFrame(() => {
+      flushWheelPanBuffer();
+    });
+
+  }, [applyZoomAroundPointer, flushWheelPanBuffer, invertTrackpadPan]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1138,6 +1220,7 @@ function TreeWorkspace({
     () => () => {
       if (traversalTimerRef.current) clearInterval(traversalTimerRef.current);
       if (transitionRafRef.current) cancelAnimationFrame(transitionRafRef.current);
+      if (wheelPanRafRef.current) cancelAnimationFrame(wheelPanRafRef.current);
     },
     [],
   );
@@ -3019,7 +3102,7 @@ export default function App() {
               <div className="setting-copy">
                 <h3>Invert trackpad pan</h3>
                 <p>
-                  Enabled means swipe up pans down and swipe left pans right. Disable if you prefer standard wheel mapping.
+                  Enabled means two-finger trackpad panning is inverted. Mouse wheel input always zooms, while pinch gestures zoom around your cursor.
                 </p>
               </div>
               <label className="setting-checkbox">
