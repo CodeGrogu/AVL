@@ -3204,7 +3204,7 @@ export default function App() {
                         type="button"
                         className="header-history-item"
                         onClick={() => handleHeaderOperationSelect(entry.id)}
-                        title={entry.headerText}
+                        {...getHeaderHintTriggerProps(entry.headerText)}
                         aria-label={entry.headerText}
                       >
                         {entry.headerText}
