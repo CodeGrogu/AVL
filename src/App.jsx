@@ -2642,6 +2642,19 @@ function TreeWorkspace({
         >
           <SkipForward size={15} className="btn-icon" />
         </button>
+        <button
+          type="button"
+          className="mobile-seekbar-control-btn mobile-speed-btn"
+          onClick={() => {
+            const index = SPEED_OPTIONS.indexOf(timelineSpeed);
+            const nextSpeed = SPEED_OPTIONS[(index + 1) % SPEED_OPTIONS.length];
+            setTimelineSpeed(nextSpeed);
+          }}
+          aria-label={`Playback speed: ${timelineSpeed}x`}
+          {...getHintTriggerProps("Cycle timeline speed")}
+        >
+          {timelineSpeed}x
+        </button>
       </div>
       <span className="sequence-readout compact mobile-seekbar-label">
         {timelineHasFrames
@@ -2768,7 +2781,7 @@ function TreeWorkspace({
                   Max
                 </ActionButton>
                 <ActionButton onClick={onRandomInsert} disabled={isTimelinePlaying} icon={Dices}>Random</ActionButton>
-                <ActionButton onClick={clearSearch} icon={Eraser}>Clear Highlight</ActionButton>
+                <ActionButton onClick={clearSearch} icon={Eraser}>Clear</ActionButton>
               </div>
             </details>
           </section>
@@ -2888,21 +2901,21 @@ function TreeWorkspace({
           {isMobileViewport && (
             <>
               <div className="mobile-fab-rail mobile-fab-rail-left" role="group" aria-label="Traversal and utility actions">
-                {TRAVERSALS.map((option) => (
-                  <button
-                    key={`mobile-${option.key}`}
-                    type="button"
-                    className={`btn mobile-fab-btn mobile-fab-text ${traversal.name === option.label ? "active" : ""}`}
-                    onClick={() => startTraversal(option.label, option.run)}
-                    disabled={isTimelinePlaying}
-                    aria-label={option.label}
-                    {...getHintTriggerProps(option.label)}
-                  >
-                    {option.label.split("-")[0]}
-                  </button>
-                ))}
-
-                <button
+                <div className="mobile-fab-peel">
+                  {TRAVERSALS.map((option) => (
+                    <button
+                      key={`mobile-${option.key}`}
+                      type="button"
+                      className={`btn mobile-fab-btn mobile-fab-text ${traversal.name === option.label ? "active" : ""}`}
+                      onClick={() => startTraversal(option.label, option.run)}
+                      disabled={isTimelinePlaying}
+                      aria-label={option.label}
+                      {...getHintTriggerProps(option.label)}
+                    >
+                      {option.label.split("-")[0]}
+                    </button>
+                  ))}
+                  <div className="mobile-fab-divider" />                <button
                   type="button"
                   className="btn mobile-fab-btn"
                   onClick={onShowMin}
@@ -2936,14 +2949,45 @@ function TreeWorkspace({
                   type="button"
                   className="btn mobile-fab-btn"
                   onClick={clearSearch}
-                  aria-label="Clear highlight"
-                  {...getHintTriggerProps("Clear highlight")}
+                  aria-label="Clear"
+                  {...getHintTriggerProps("Clear")}
                 >
                   <Eraser size={16} className="btn-icon" />
                 </button>
+                </div>
               </div>
 
               <div className="mobile-fab-rail mobile-fab-rail-right" role="group" aria-label="Tree and replay actions">
+                <div className="mobile-fab-peel">
+                  <button
+                    type="button"
+                    className="btn mobile-fab-btn"
+                    onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
+                    aria-label="Zoom in"
+                    {...getHintTriggerProps("Zoom in")}
+                  >
+                    <ZoomIn size={16} className="btn-icon" />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn mobile-fab-btn"
+                    onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
+                    aria-label="Zoom out"
+                    {...getHintTriggerProps("Zoom out")}
+                  >
+                    <ZoomOut size={16} className="btn-icon" />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn mobile-fab-btn"
+                    onClick={fitCanvas}
+                    aria-label="Fit tree to canvas"
+                    {...getHintTriggerProps("Fit tree to canvas")}
+                  >
+                    <Maximize size={16} className="btn-icon" />
+                  </button>
+                  
+                  <div className="mobile-fab-divider" />
                 <button
                   type="button"
                   className="btn mobile-fab-btn mobile-fab-btn-positive"
@@ -2984,44 +3028,10 @@ function TreeWorkspace({
                 >
                   <Trash size={16} className="btn-icon" />
                 </button>
-                <button
-                  type="button"
-                  className="btn mobile-fab-btn"
-                  onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
-                  aria-label="Zoom in"
-                  {...getHintTriggerProps("Zoom in")}
-                >
-                  <ZoomIn size={16} className="btn-icon" />
-                </button>
-                <div
-                  className="mobile-fab-btn mobile-fab-zoom-readout"
-                  role="status"
-                  aria-label={`Zoom level ${Math.round(renderedZoom * 100)} percent`}
-                >
-                  {Math.round(renderedZoom * 100)}%
                 </div>
-                <button
-                  type="button"
-                  className="btn mobile-fab-btn"
-                  onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
-                  aria-label="Zoom out"
-                  {...getHintTriggerProps("Zoom out")}
-                >
-                  <ZoomOut size={16} className="btn-icon" />
-                </button>
-                <button
-                  type="button"
-                  className="btn mobile-fab-btn"
-                  onClick={fitCanvas}
-                  aria-label="Fit tree to canvas"
-                  {...getHintTriggerProps("Fit tree to canvas")}
-                >
-                  <Maximize size={16} className="btn-icon" />
-                </button>
-
               </div>
 
-              <span className={`status-pill mobile-status-pill ${message.ok ? "good" : "bad"}`} role="status" aria-live="polite">
+              <span className={`status-pill mobile-status-pill top-right-status ${message.ok ? "good" : "bad"}`} role="status" aria-live="polite">
                 {message.text}
               </span>
             </>
@@ -3662,7 +3672,6 @@ export default function App() {
                         type="button"
                         className="header-history-item"
                         onClick={() => handleHeaderOperationSelect(entry.id)}
-                        {...getHeaderHintTriggerProps(entry.headerText)}
                         aria-label={entry.headerText}
                       >
                         {entry.headerText}

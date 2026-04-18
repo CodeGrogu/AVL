@@ -7,7 +7,7 @@
     --stats-strip-height: 32px;
     --stats-strip-padding-y: 4px;
     --mobile-fab-top-offset: calc(var(--stats-strip-height) + (var(--stats-strip-padding-y) * 2) + var(--canvas-control-inset));
-    --mobile-control-bottom-offset: calc(72px + env(safe-area-inset-bottom, 0px));
+    --mobile-control-bottom-offset: calc(110px + env(safe-area-inset-bottom, 0px));
     --mobile-zoom-bottom-offset: calc(var(--mobile-control-bottom-offset) + 28px);
   }
 
@@ -123,11 +123,13 @@
 
   .app-header-menu.open {
     display: flex;
-    background: #ffffff;
-    border: 1px solid var(--border);
-    border-radius: 0;
-    padding: 8px;
-    box-shadow: 0 12px 24px -20px rgba(18, 35, 63, 0.45);
+    background: #faf8f5;
+    border: 2px dashed #d6d3d1;
+    border-radius: 4px;
+    padding: 16px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.03);
+    background-image: linear-gradient(rgba(120, 113, 108, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 113, 108, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
   }
 
   /* When the header menu is open, stack header actions and make the
@@ -363,14 +365,13 @@
 
   .mobile-fab-rail {
     position: absolute;
-    top: var(--mobile-fab-top-offset);
+    top: auto;
     bottom: var(--mobile-control-bottom-offset);
-    /* keep below header/status/dock overlays */
     z-index: 10;
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     max-height: none;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -401,10 +402,11 @@
   pointer-events: none !important;
 }
 
-  .mobile-status-pill {
+  .mobile-status-pill.top-right-status {
     position: absolute;
+    top: var(--mobile-fab-top-offset);
     right: var(--canvas-control-inset);
-    bottom: calc(var(--mobile-control-bottom-offset) + 22px);
+    bottom: auto;
     z-index: 13;
     width: auto;
     max-width: min(62vw, 260px);
@@ -422,30 +424,55 @@
     text-overflow: ellipsis;
     box-shadow: 0 8px 16px -14px rgba(19, 38, 66, 0.55);
     pointer-events: none;
+    background: #faf8f5;
+    border: 1px solid #d6d3d1;
+    color: #57534e;
+  }
+  
+  .mobile-fab-peel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: rgba(250, 248, 245, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px dashed #d6d3d1;
+    border-radius: 30px;
+    padding: 4px;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.03);
+  }
+
+  .mobile-fab-divider {
+    width: 28px;
+    height: 1px;
+    background: #d6d3d1;
+    margin: 6px 0;
   }
 
   .mobile-fab-btn {
-    width: 52px;
-    height: 52px;
-    min-height: 52px;
-    min-width: 52px;
+    width: 48px;
+    height: 48px;
+    min-height: 48px;
+    min-width: 48px;
     border-radius: 999px;
     padding: 0;
-    border: 1px solid #c8d8eb;
-    background: #ffffff;
-    box-shadow: 0 10px 20px -14px rgba(19, 38, 66, 0.55);
+    border: 1px solid transparent;
+    background: transparent;
+    box-shadow: none;
+    color: #57534e;
+    transition: all 0.2s ease;
   }
 
   .mobile-fab-btn.active {
-    border-color: #8ec1eb;
-    color: #0f4f9a;
-    background: var(--info-soft);
+    border-color: #d6d3d1;
+    color: #1c1917;
+    background: rgba(28, 25, 23, 0.05);
   }
 
   .mobile-fab-btn.mobile-fab-text {
     font-size: 0.66rem;
-    font-weight: 800;
-    letter-spacing: 0.01em;
+    font-family: "SF Mono", "Cascadia Code", monospace;
   }
 
   .mobile-fab-btn .btn-icon {
@@ -454,16 +481,23 @@
 
   .mobile-fab-btn-positive:not(:disabled):hover,
   .mobile-fab-btn-positive:not(:disabled):focus-visible {
-    border-color: #8fd3a8;
-    color: #0f6b3b;
-    background: #ecfdf3;
+    border-color: #d6d3d1;
+    color: #1c1917;
+    background: rgba(28, 25, 23, 0.05);
   }
 
   .mobile-fab-btn-negative:not(:disabled):hover,
   .mobile-fab-btn-negative:not(:disabled):focus-visible {
-    border-color: #f3a6a6;
+    border-color: #d6d3d1;
     color: #b42318;
-    background: #fff1f1;
+    background: rgba(28, 25, 23, 0.05);
+  }
+  
+  .empty-state {
+    padding-bottom: 220px; /* Offset for mobile fab peels from bottom */
+    padding-left: 70px;    /* Prevent overlap with left peel */
+    padding-right: 70px;   /* Prevent overlap with right peel */
+    box-sizing: border-box;
   }
 
   .mobile-fab-zoom-readout {
@@ -482,23 +516,21 @@
 
   .mobile-seekbar-dock {
     position: relative;
-    left: auto;
-    right: auto;
-    transform: none;
-    bottom: auto;
     z-index: 11;
     width: auto;
-    margin-top: auto;
-    border-top: 1px solid rgba(206, 221, 239, 0.95);
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
+    margin: auto 0 0 0;
+    background: rgba(250, 248, 245, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px dashed #d6d3d1;
+    border-right: none;
+    border-left: none;
+    border-bottom: none;
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.97);
-    box-shadow: 0 -8px 18px -16px rgba(18, 35, 63, 0.55);
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.03);
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
     display: grid;
-    gap: 6px;
+    gap: 8px;
   }
 
   .mobile-seekbar-dock .timeline-slider-row {
@@ -522,7 +554,7 @@
 
   .mobile-seekbar-controls {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -530,14 +562,21 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 34px;
-    border: 1px solid #c8d8eb;
-    border-radius: 8px;
-    background: #ffffff;
-    color: #1d3f66;
-    box-shadow: 0 8px 16px -14px rgba(19, 38, 66, 0.55);
+    min-height: 38px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    color: #57534e;
     padding: 0;
     cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: "SF Mono", "Cascadia Code", monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .mobile-seekbar-control-btn:not(:disabled):hover {
+    background: rgba(28, 25, 23, 0.05);
   }
 
   .mobile-seekbar-control-btn .btn-icon {
@@ -545,8 +584,9 @@
   }
 
   .mobile-seekbar-control-btn-play {
-    border-color: #9bc1ec;
-    background: #eaf3ff;
+    color: #1c1917;
+    background: rgba(28, 25, 23, 0.04);
+    border-color: #d6d3d1;
   }
 
   .mobile-seekbar-control-btn:disabled {

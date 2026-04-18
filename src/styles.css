@@ -45,6 +45,15 @@ body {
   overflow: hidden;
 }
 
+button {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+  /* Prevent transform blur on hovered buttons */
+  backface-visibility: hidden;
+  transform: translateZ(0); 
+}
+
 html,
 body,
 #root,
@@ -119,12 +128,13 @@ body::-webkit-scrollbar,
   display: none;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(206, 221, 239, 0.95);
-  border-radius: 10px;
-  background: #f7fbff;
+  border: 1px dashed #d6d3d1;
+  border-radius: 4px;
+  background: rgba(250, 248, 245, 0.8);
   height: 44px;
   min-height: 44px;
   padding: 4px 8px;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.03);
 }
 
 .header-history-label {
@@ -132,12 +142,13 @@ body::-webkit-scrollbar,
   align-items: center;
   justify-content: center;
   align-self: stretch;
-  border-radius: 8px;
-  border: 1px solid #d0deef;
-  background: #ffffff;
-  color: #395674;
+  border-radius: 2px;
+  border: 1px solid #d6d3d1;
+  background: rgba(28, 25, 23, 0.05);
+  color: #1c1917;
+  font-family: "SF Mono", "Cascadia Code", monospace;
   font-size: 0.65rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   padding: 0 9px;
@@ -172,10 +183,11 @@ body::-webkit-scrollbar,
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  border-radius: 8px;
-  border: 1px solid #d0deef;
-  background: #ffffff;
-  color: #304d6d;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #57534e;
+  font-family: "SF Mono", "Cascadia Code", monospace;
   font-size: 0.68rem;
   font-weight: 700;
   line-height: 1;
@@ -187,20 +199,22 @@ body::-webkit-scrollbar,
   cursor: pointer;
   text-align: left;
   white-space: nowrap;
+  transition: all 0.2s ease;
 }
 
 .header-history-item:hover {
-  border-color: #9fb7d7;
-  background: #f3f8ff;
+  border-color: #d6d3d1;
+  background: rgba(28, 25, 23, 0.05);
+  color: #1c1917;
 }
 
 .header-history-item:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 2px dashed #a8a29e;
   outline-offset: 2px;
 }
 
 .header-history-empty {
-  color: #6a809a;
+  color: #a8a29e;
   font-weight: 600;
 }
 
@@ -226,17 +240,20 @@ body::-webkit-scrollbar,
   justify-content: center;
   width: 42px;
   height: 42px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #ffffff;
-  color: #2d4666;
+  border: 1px dashed #d6d3d1;
+  border-radius: 4px;
+  background: transparent;
+  color: #57534e;
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  transition: all 0.2s ease;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.03);
 }
 
-.app-header-menu-toggle:hover {
-  border-color: #bdd0e7;
-  background: #f4f9ff;
+.app-header-menu-toggle:hover,
+.app-header-menu-toggle.active {
+  border-color: #a8a29e;
+  background: rgba(28, 25, 23, 0.05);
+  color: #1c1917;
 }
 
 .app-header-menu-toggle:focus-visible {
@@ -275,18 +292,27 @@ body::-webkit-scrollbar,
 }
 
 .settings-btn {
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  border: 1px dashed #d6d3d1;
+  border-radius: 4px;
   height: 26px;
   padding: 4px 12px;
   font-size: 0.78rem;
+  font-family: "SF Mono", "Cascadia Code", monospace;
   font-weight: 700;
-  color: #2d4666;
-  background: #ffffff;
+  color: #57534e;
+  background: transparent;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.03);
+}
+
+.settings-btn:hover {
+  background: rgba(28, 25, 23, 0.05);
+  border-color: #a8a29e;
+  color: #1c1917;
 }
 
 .home-panel-shell {
@@ -535,24 +561,27 @@ body::-webkit-scrollbar,
 }
 
 .switcher-btn {
-  border: 0;
-  border-radius: 999px;
+  border: 1px solid transparent;
+  border-radius: 4px;
   background: transparent;
-  color: var(--muted);
+  color: #78716c;
   padding: 6px 12px;
   font-size: 0.76rem;
   font-weight: 700;
+  font-family: "SF Mono", "Cascadia Code", monospace;
   cursor: pointer;
-  transition: background 0.16s ease, color 0.16s ease;
+  transition: all 0.16s ease;
 }
 
 .switcher-btn.active {
-  background: #e3eefc;
-  color: #0f4f9a;
+  background: rgba(28, 25, 23, 0.08);
+  border-color: #78716c;
+  color: #1c1917;
 }
 
 .switcher-btn:hover {
-  color: #1d3555;
+  color: #1c1917;
+  background: rgba(28, 25, 23, 0.03);
 }
 
 .journal-container {
