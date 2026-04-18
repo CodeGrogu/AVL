@@ -21,6 +21,7 @@ import {
   treeSize,
   treeLeavesCount,
   treeInternalNodesCount,
+  treeStats,
 } from "./trees/baseTree";
 import { TREE_CONFIG, TREE_TYPE_ORDER, TAB_TO_TYPE, TYPE_TO_TAB } from "./trees/treeRegistry";
 
@@ -2601,13 +2602,15 @@ function TreeWorkspace({
 
   const extraMetric = config.extraMetric(root);
   const parsedExtraMetric = parseMetricText(extraMetric);
+  // Single-pass stats computation — replaces 6 separate full-tree traversals
+  const stats = useMemo(() => treeStats(root), [root]);
   const statsMetrics = [
-    { key: "nodes", label: "Nodes", value: treeSize(root) },
-    { key: "leaves", label: "Leaves", value: treeLeavesCount(root) },
-    { key: "internal", label: "Internal", value: treeInternalNodesCount(root) },
-    { key: "height", label: "Height", value: treeHeight(root) },
-    { key: "min", label: "Min", value: treeMin(root) ?? "-" },
-    { key: "max", label: "Max", value: treeMax(root) ?? "-" },
+    { key: "nodes", label: "Nodes", value: stats.size },
+    { key: "leaves", label: "Leaves", value: stats.leaves },
+    { key: "internal", label: "Internal", value: stats.internal },
+    { key: "height", label: "Height", value: stats.height },
+    { key: "min", label: "Min", value: stats.min ?? "-" },
+    { key: "max", label: "Max", value: stats.max ?? "-" },
     ...(parsedExtraMetric ? [{ key: "extra", label: parsedExtraMetric.label, value: parsedExtraMetric.value }] : []),
   ];
   const showHistorySection = !isMobileViewport;

@@ -23,20 +23,113 @@ export const treeMin = (root) => minNode(root)?.val ?? null;
 
 export const treeMax = (root) => maxNode(root)?.val ?? null;
 
-export const treeSize = (root) => (!root ? 0 : 1 + treeSize(root.left) + treeSize(root.right));
-
-export const treeHeight = (root) => (!root ? 0 : 1 + Math.max(treeHeight(root.left), treeHeight(root.right)));
-
-export const treeLeavesCount = (root) => {
+// Iterative treeSize — avoids stack overflow and call-frame overhead on deep trees
+export const treeSize = (root) => {
   if (!root) return 0;
-  if (!root.left && !root.right) return 1;
-  return treeLeavesCount(root.left) + treeLeavesCount(root.right);
+  let count = 0;
+  const stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    count += 1;
+    if (node.right) stack.push(node.right);
+    if (node.left) stack.push(node.left);
+  }
+  return count;
 };
 
+// Iterative treeHeight — uses explicit stack with depth tracking
+export const treeHeight = (root) => {
+  if (!root) return 0;
+  let maxDepth = 0;
+  // Stack stores [node, depth] pairs
+  const stack = [[root, 1]];
+  while (stack.length) {
+    const entry = stack.pop();
+    const node = entry[0];
+    const depth = entry[1];
+    if (!node.left && !node.right) {
+      if (depth > maxDepth) maxDepth = depth;
+    } else {
+      if (node.right) stack.push([node.right, depth + 1]);
+      if (node.left) stack.push([node.left, depth + 1]);
+    }
+  }
+  return maxDepth;
+};
+
+// Iterative treeLeavesCount
+export const treeLeavesCount = (root) => {
+  if (!root) return 0;
+  let count = 0;
+  const stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node.left && !node.right) {
+      count += 1;
+    } else {
+      if (node.right) stack.push(node.right);
+      if (node.left) stack.push(node.left);
+    }
+  }
+  return count;
+};
+
+// Iterative treeInternalNodesCount
 export const treeInternalNodesCount = (root) => {
   if (!root) return 0;
-  if (!root.left && !root.right) return 0;
-  return 1 + treeInternalNodesCount(root.left) + treeInternalNodesCount(root.right);
+  let count = 0;
+  const stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    if (node.left || node.right) {
+      count += 1;
+      if (node.right) stack.push(node.right);
+      if (node.left) stack.push(node.left);
+    }
+  }
+  return count;
+};
+
+/**
+ * Compute all tree stats in a single iterative pass.
+ * Returns { size, height, leaves, internal, min, max }.
+ * This avoids 6 separate full-tree traversals.
+ */
+export const treeStats = (root) => {
+  if (!root) {
+    return { size: 0, height: 0, leaves: 0, internal: 0, min: null, max: null };
+  }
+
+  let size = 0;
+  let leaves = 0;
+  let internal = 0;
+  let maxDepth = 0;
+  let minVal = root.val;
+  let maxVal = root.val;
+
+  // Stack of [node, depth]
+  const stack = [[root, 1]];
+  while (stack.length) {
+    const entry = stack.pop();
+    const node = entry[0];
+    const depth = entry[1];
+    size += 1;
+
+    if (node.val < minVal) minVal = node.val;
+    if (node.val > maxVal) maxVal = node.val;
+
+    const hasChildren = node.left || node.right;
+    if (!hasChildren) {
+      leaves += 1;
+      if (depth > maxDepth) maxDepth = depth;
+    } else {
+      internal += 1;
+      if (node.right) stack.push([node.right, depth + 1]);
+      if (node.left) stack.push([node.left, depth + 1]);
+    }
+  }
+
+  return { size, height: maxDepth, leaves, internal, min: minVal, max: maxVal };
 };
 
 export const searchPath = (root, value) => {
@@ -117,12 +210,15 @@ export const postOrder = (root, out = []) => {
   return out;
 };
 
+// Optimized levelOrder — uses index pointer instead of expensive Array.shift()
 export const levelOrder = (root) => {
   if (!root) return [];
   const queue = [root];
   const out = [];
-  while (queue.length) {
-    const node = queue.shift();
+  let head = 0;
+  while (head < queue.length) {
+    const node = queue[head];
+    head += 1;
     out.push(node.val);
     if (node.left) queue.push(node.left);
     if (node.right) queue.push(node.right);
@@ -134,8 +230,16 @@ export const inOrderValues = (root) => inOrder(root, []);
 
 export const buildTree = (values, insertFn) => values.reduce((acc, value) => insertFn(acc, value), null);
 
-const slotCount = (node) =>
-  !node ? 1 : !node.left && !node.right ? 1 : slotCount(node.left) + slotCount(node.right);
+// Cached slotCount using a WeakMap — avoids recomputing the same subtree multiple times
+const _slotCache = new WeakMap();
+const slotCount = (node) => {
+  if (!node) return 1;
+  const cached = _slotCache.get(node);
+  if (cached !== undefined) return cached;
+  const result = !node.left && !node.right ? 1 : slotCount(node.left) + slotCount(node.right);
+  _slotCache.set(node, result);
+  return result;
+};
 
 export const layoutTree = (
   root,
@@ -151,37 +255,31 @@ export const layoutTree = (
   const nodeMap = new Map();
   const edges = [];
   let maxDepth = 0;
+  const rowHeight = nodeRadius * 2 + verticalGap;
+
   const place = (node, startSlot, depth) => {
     if (!node) return;
-    maxDepth = Math.max(maxDepth, depth);
+    if (depth > maxDepth) maxDepth = depth;
     const widthSlots = slotCount(node);
     const x = padding + (startSlot + widthSlots / 2) * horizontalSlot;
-    const y = padding + depth * (nodeRadius * 2 + verticalGap) + nodeRadius;
+    const y = padding + depth * rowHeight + nodeRadius;
 
-    const nodeMeta = {
-      value: node.val,
-      node,
-      x,
-      y,
-      depth,
-    };
-
-    nodeMap.set(node.val, nodeMeta);
+    nodeMap.set(node.val, { value: node.val, node, x, y, depth });
 
     if (node.left) edges.push({ from: node.val, to: node.left.val, key: `${node.val}->${node.left.val}` });
     if (node.right) edges.push({ from: node.val, to: node.right.val, key: `${node.val}->${node.right.val}` });
 
+    const leftSlots = slotCount(node.left);
     place(node.left, startSlot, depth + 1);
-    place(node.right, startSlot + slotCount(node.left), depth + 1);
+    place(node.right, startSlot + leftSlots, depth + 1);
   };
   place(root, 0, 0);
 
   return {
     root,
     nodeMap,
-    nodes: Array.from(nodeMap.values()),
     edges,
     width: slotCount(root) * horizontalSlot + padding * 2,
-    height: (maxDepth + 1) * (nodeRadius * 2 + verticalGap) - verticalGap + nodeRadius * 2 + padding * 2,
+    height: (maxDepth + 1) * rowHeight - verticalGap + nodeRadius * 2 + padding * 2,
   };
 };
