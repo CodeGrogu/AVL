@@ -1478,8 +1478,6 @@ function TreeWorkspace({
     loadOperation(externalOperationRequest.operationId, false);
 
     if (isMobileViewport) {
-      setRightSidebarOpen(true);
-      setMobileRightPanel("history");
       setLeftSidebarOpen(false);
     }
   }, [externalOperationRequest, type, isMobileViewport, operationHistory]);
