@@ -615,13 +615,27 @@ function LegendDot({ fill, stroke, label, ring }) {
 
 // Rich context-aware tooltip for hovered tree nodes
 function NodeTooltip({ hoveredNode, treeType, timelineFrame, frameFocusSet, pathSet, foundValue, traversal, pan, zoom, canvasRef }) {
-  if (!hoveredNode || !canvasRef?.current) return null;
+  const hasHoveredNode = Boolean(hoveredNode && canvasRef?.current);
+  const value = hoveredNode?.value;
+  const node = hoveredNode?.node;
+  const anchor = useMemo(() => {
+    if (!hasHoveredNode || !canvasRef?.current) return null;
 
-  const { value, node, x, y } = hoveredNode;
-  const svgRect = canvasRef.current.getBoundingClientRect();
+    const svgRect = canvasRef.current.getBoundingClientRect();
+    return {
+      x: svgRect.left + pan.x + hoveredNode.x * zoom,
+      y: svgRect.top + pan.y + hoveredNode.y * zoom,
+    };
+  }, [canvasRef, hasHoveredNode, hoveredNode, pan.x, pan.y, zoom]);
 
-  const screenX = svgRect.left + pan.x + x * zoom;
-  const screenY = svgRect.top + pan.y + y * zoom;
+  const { tooltipRef, layout } = useTooltipPlacement({
+    anchor,
+    visible: hasHoveredNode,
+    preferredPlacement: "top",
+    offset: NODE_RADIUS * zoom + 12,
+  });
+
+  if (!hasHoveredNode || !anchor || !node) return null;
 
   const lines = [];
 
@@ -708,11 +722,13 @@ function NodeTooltip({ hoveredNode, treeType, timelineFrame, frameFocusSet, path
 
   return (
     <div
-      className="node-tooltip"
+      ref={tooltipRef}
+      className={`node-tooltip placement-${layout.placement} ${layout.ready ? "is-ready" : "is-measuring"}`}
       style={{
         position: "fixed",
-        left: `${screenX}px`,
-        top: `${screenY - NODE_RADIUS * zoom - 12}px`,
+        left: `${layout.left}px`,
+        top: `${layout.top}px`,
+        visibility: layout.ready ? "visible" : "hidden",
       }}
     >
       <div className="node-tooltip-inner">
