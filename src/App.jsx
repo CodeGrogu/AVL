@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Trash2, Search, Eraser, ArrowDownToLine, ArrowUpToLine, Dices, Trash,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
-  ChevronDown, ZoomIn, ZoomOut, Maximize,
+  ChevronDown, ZoomIn, ZoomOut, Maximize, Menu, X,
   SkipBack, Play, Pause, SkipForward, RotateCcw, SlidersHorizontal
 } from "lucide-react";
 import {
@@ -42,8 +42,160 @@ const TRAVERSALS = [
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const APP_TITLE_FULL = "Modular Binary Tree Lab";
 const APP_TITLE_COMPACT = "MBTL";
+const TOOLTIP_VIEWPORT_PADDING = 12;
+const TOOLTIP_DEFAULT_OFFSET = 12;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const resolveVerticalPlacement = ({ preferredPlacement, anchorY, tooltipHeight, offset, viewportHeight }) => {
+  const topFits = anchorY - offset - tooltipHeight >= TOOLTIP_VIEWPORT_PADDING;
+  const bottomFits = anchorY + offset + tooltipHeight <= viewportHeight - TOOLTIP_VIEWPORT_PADDING;
+
+  if (preferredPlacement === "bottom") {
+    if (bottomFits) return "bottom";
+    if (topFits) return "top";
+  } else {
+    if (topFits) return "top";
+    if (bottomFits) return "bottom";
+  }
+
+  const topSpace = anchorY - TOOLTIP_VIEWPORT_PADDING;
+  const bottomSpace = viewportHeight - anchorY - TOOLTIP_VIEWPORT_PADDING;
+  return bottomSpace > topSpace ? "bottom" : "top";
+};
+
+const computeTooltipLayout = ({ anchorX, anchorY, tooltipWidth, tooltipHeight, preferredPlacement, offset }) => {
+  const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+  const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 0;
+
+  const placement = resolveVerticalPlacement({
+    preferredPlacement,
+    anchorY,
+    tooltipHeight,
+    offset,
+    viewportHeight,
+  });
+
+  const minLeft = TOOLTIP_VIEWPORT_PADDING;
+  const maxLeft = Math.max(minLeft, viewportWidth - tooltipWidth - TOOLTIP_VIEWPORT_PADDING);
+  const left = clamp(anchorX - tooltipWidth / 2, minLeft, maxLeft);
+
+  const rawTop = placement === "top"
+    ? anchorY - offset - tooltipHeight
+    : anchorY + offset;
+
+  const minTop = TOOLTIP_VIEWPORT_PADDING;
+  const maxTop = Math.max(minTop, viewportHeight - tooltipHeight - TOOLTIP_VIEWPORT_PADDING);
+  const top = clamp(rawTop, minTop, maxTop);
+
+  return { left, top, placement };
+};
+
+function useTooltipPlacement({ anchor, visible, preferredPlacement = "top", offset = TOOLTIP_DEFAULT_OFFSET }) {
+  const tooltipRef = useRef(null);
+  const [viewportTick, setViewportTick] = useState(0);
+  const [layout, setLayout] = useState({ left: 0, top: 0, placement: preferredPlacement, ready: false });
+
+  useLayoutEffect(() => {
+    if (!visible || !anchor || !tooltipRef.current) {
+      setLayout((prev) => ({ ...prev, placement: preferredPlacement, ready: false }));
+      return;
+    }
+
+    const rect = tooltipRef.current.getBoundingClientRect();
+    const next = computeTooltipLayout({
+      anchorX: anchor.x,
+      anchorY: anchor.y,
+      tooltipWidth: rect.width,
+      tooltipHeight: rect.height,
+      preferredPlacement,
+      offset,
+    });
+
+    setLayout({ ...next, ready: true });
+  }, [visible, anchor, preferredPlacement, offset, viewportTick]);
+
+  useEffect(() => {
+    if (!visible || typeof window === "undefined") return undefined;
+
+    const handleViewportChange = () => {
+      setViewportTick((current) => current + 1);
+    };
+
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || !anchor || typeof window === "undefined") return undefined;
+
+    const rafId = window.requestAnimationFrame(() => {
+      setViewportTick((current) => current + 1);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [visible, anchor, offset]);
+
+  return { tooltipRef, layout };
+}
+const getTouchDistance = (first, second) =>
+  Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+const getTouchCenter = (first, second) => ({
+  x: (first.clientX + second.clientX) / 2,
+  y: (first.clientY + second.clientY) / 2,
+});
+
+const WHEEL_DELTA_MODE_LINE = 1;
+const WHEEL_DELTA_MODE_PAGE = 2;
+const WHEEL_LINE_SIZE = 16;
+const WHEEL_PAGE_SIZE = 100;
+const WHEEL_DEAD_ZONE = 0.15;
+const TRACKPAD_PAN_DELTA_LIMIT = 80;
+const PINCH_ZOOM_DELTA_LIMIT = 12;
+const MOUSE_WHEEL_ZOOM_DELTA_LIMIT = 90;
+const PINCH_ZOOM_SENSITIVITY = 0.01;
+const MOUSE_WHEEL_ZOOM_SENSITIVITY = 0.0015;
+
+const normalizeWheelDeltas = (event) => {
+  if (event.deltaMode === WHEEL_DELTA_MODE_LINE) {
+    return {
+      deltaX: event.deltaX * WHEEL_LINE_SIZE,
+      deltaY: event.deltaY * WHEEL_LINE_SIZE,
+    };
+  }
+
+  if (event.deltaMode === WHEEL_DELTA_MODE_PAGE) {
+    return {
+      deltaX: event.deltaX * WHEEL_PAGE_SIZE,
+      deltaY: event.deltaY * WHEEL_PAGE_SIZE,
+    };
+  }
+
+  return {
+    deltaX: event.deltaX,
+    deltaY: event.deltaY,
+  };
+};
+
+const isLikelyMouseWheel = (event, normalizedDeltaX, normalizedDeltaY) => {
+  if (event.deltaMode !== 0) return true;
+
+  const absX = Math.abs(normalizedDeltaX);
+  const absY = Math.abs(normalizedDeltaY);
+
+  if (absX > 0.1) return false;
+  if (absY <= 15) return false;
+  if (absY >= 40) return true;
+
+  return Number.isInteger(normalizedDeltaY) && absY >= 16;
+};
 
 const getHistorySignature = (values) => values.join("|");
 
@@ -203,6 +355,26 @@ const FRAME_KIND_META = {
 };
 
 const getFrameKindMeta = (kind) => FRAME_KIND_META[kind] ?? { label: "Step", tone: "neutral" };
+
+const formatHeaderHistoryEntry = (entry) => {
+  const frames = Array.isArray(entry?.frames) ? entry.frames : [];
+  const pathValues = frames
+    .filter((frame) => frame?.kind === "visit")
+    .slice(0, 4)
+    .map((frame) => frame.label?.replace(/^Visit\s+/, ""))
+    .filter(Boolean);
+
+  const hasRebalance = frames.some((frame) =>
+    ["rotation", "rotation-result", "case", "color-flip", "color-flip-result", "replace"].includes(frame?.kind),
+  );
+
+  const segments = [entry?.title];
+  if (pathValues.length) segments.push(`path ${pathValues.join("->")}`);
+  if (hasRebalance) segments.push("rebalance");
+  if (frames.length) segments.push(`${frames.length} frames`);
+
+  return segments.filter(Boolean).join(" • ");
+};
 
 const summarizeFrames = (frames, fallback) => {
   for (let idx = frames.length - 1; idx >= 0; idx -= 1) {
@@ -414,9 +586,9 @@ const interpolateLayout = (fromLayout, toLayout, progress) => {
   };
 };
 
-function ActionButton({ children, onClick, variant = "neutral", disabled = false, icon: Icon }) {
+function ActionButton({ children, onClick, variant = "neutral", disabled = false, icon: Icon, className = "" }) {
   return (
-    <button type="button" className={`btn ${variant}`} onClick={onClick} disabled={disabled}>
+    <button type="button" className={`btn ${variant} ${className}`.trim()} onClick={onClick} disabled={disabled}>
       {Icon && <Icon size={14} className="btn-icon" />}
       {children}
     </button>
@@ -443,13 +615,27 @@ function LegendDot({ fill, stroke, label, ring }) {
 
 // Rich context-aware tooltip for hovered tree nodes
 function NodeTooltip({ hoveredNode, treeType, timelineFrame, frameFocusSet, pathSet, foundValue, traversal, pan, zoom, canvasRef }) {
-  if (!hoveredNode || !canvasRef?.current) return null;
+  const hasHoveredNode = Boolean(hoveredNode && canvasRef?.current);
+  const value = hoveredNode?.value;
+  const node = hoveredNode?.node;
+  const anchor = useMemo(() => {
+    if (!hasHoveredNode || !canvasRef?.current) return null;
 
-  const { value, node, x, y } = hoveredNode;
-  const svgRect = canvasRef.current.getBoundingClientRect();
+    const svgRect = canvasRef.current.getBoundingClientRect();
+    return {
+      x: svgRect.left + pan.x + hoveredNode.x * zoom,
+      y: svgRect.top + pan.y + hoveredNode.y * zoom,
+    };
+  }, [canvasRef, hasHoveredNode, hoveredNode, pan.x, pan.y, zoom]);
 
-  const screenX = svgRect.left + pan.x + x * zoom;
-  const screenY = svgRect.top + pan.y + y * zoom;
+  const { tooltipRef, layout } = useTooltipPlacement({
+    anchor,
+    visible: hasHoveredNode,
+    preferredPlacement: "top",
+    offset: NODE_RADIUS * zoom + 12,
+  });
+
+  if (!hasHoveredNode || !anchor || !node) return null;
 
   const lines = [];
 
@@ -536,11 +722,13 @@ function NodeTooltip({ hoveredNode, treeType, timelineFrame, frameFocusSet, path
 
   return (
     <div
-      className="node-tooltip"
+      ref={tooltipRef}
+      className={`node-tooltip placement-${layout.placement} ${layout.ready ? "is-ready" : "is-measuring"}`}
       style={{
         position: "fixed",
-        left: `${screenX}px`,
-        top: `${screenY - NODE_RADIUS * zoom - 12}px`,
+        left: `${layout.left}px`,
+        top: `${layout.top}px`,
+        visibility: layout.ready ? "visible" : "hidden",
       }}
     >
       <div className="node-tooltip-inner">
@@ -558,17 +746,29 @@ function NodeTooltip({ hoveredNode, treeType, timelineFrame, frameFocusSet, path
 }
 
 function TimelineSegmentTooltip({ hoveredSegment }) {
-  if (!hoveredSegment?.frame) return null;
+  const hasSegment = Boolean(hoveredSegment?.frame);
+  const frame = hoveredSegment?.frame;
+  const index = hoveredSegment?.index;
+  const total = hoveredSegment?.total;
+  const x = hoveredSegment?.x;
+  const y = hoveredSegment?.y;
+  const anchor = useMemo(() => ({ x, y }), [x, y]);
+  const { tooltipRef, layout } = useTooltipPlacement({
+    anchor,
+    visible: hasSegment,
+    preferredPlacement: "top",
+    offset: 14,
+  });
+  const kindMeta = frame ? getFrameKindMeta(frame.kind) : getFrameKindMeta(null);
 
-  const { frame, index, total, x, y } = hoveredSegment;
-  const kindMeta = getFrameKindMeta(frame.kind);
+  if (!hasSegment || !frame) return null;
 
   return (
     <div
-      className="timeline-segment-tooltip"
-      style={{ left: `${x}px`, top: `${y}px` }}
+      ref={tooltipRef}
+      className={`timeline-segment-tooltip placement-${layout.placement} ${layout.ready ? "is-ready" : "is-measuring"}`}
+      style={{ left: `${layout.left}px`, top: `${layout.top}px`, visibility: layout.ready ? "visible" : "hidden" }}
       role="tooltip"
-      aria-hidden="true"
     >
       <div className="timeline-segment-tooltip-inner">
         <div className="timeline-segment-tooltip-meta">
@@ -581,6 +781,34 @@ function TimelineSegmentTooltip({ hoveredSegment }) {
         )}
         {frame.explanation && <p className="timeline-segment-body">{frame.explanation}</p>}
       </div>
+    </div>
+  );
+}
+
+function HintTooltip({ hoveredHint }) {
+  const hasHint = Boolean(hoveredHint?.text);
+
+  const anchor = useMemo(() => {
+    if (!hoveredHint) return null;
+    return { x: hoveredHint.x, y: hoveredHint.y };
+  }, [hoveredHint]);
+  const { tooltipRef, layout } = useTooltipPlacement({
+    anchor,
+    visible: hasHint,
+    preferredPlacement: "top",
+    offset: TOOLTIP_DEFAULT_OFFSET,
+  });
+
+  if (!hasHint || !anchor) return null;
+
+  return (
+    <div
+      ref={tooltipRef}
+      className={`hint-tooltip placement-${layout.placement} ${layout.ready ? "is-ready" : "is-measuring"}`}
+      style={{ left: `${layout.left}px`, top: `${layout.top}px`, visibility: layout.ready ? "visible" : "hidden" }}
+      role="tooltip"
+    >
+      <div className="hint-tooltip-inner">{hoveredHint.text}</div>
     </div>
   );
 }
@@ -720,6 +948,7 @@ function TreeWorkspace({
   session,
   onSessionChange,
   invertTrackpadPan,
+  externalOperationRequest,
 }) {
   const config = TREE_CONFIG[type];
 
@@ -740,6 +969,10 @@ function TreeWorkspace({
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+  const [actionModal, setActionModal] = useState({ open: false, type: null, value: "" });
+  const [isMobileViewport, setIsMobileViewport] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 760px)").matches : false,
+  );
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -747,8 +980,24 @@ function TreeWorkspace({
   const [isResizing, setIsResizing] = useState(false);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [hoveredTimelineSegment, setHoveredTimelineSegment] = useState(null);
+  const [hoveredHint, setHoveredHint] = useState(null);
 
   const dragRef = useRef({ active: false, startX: 0, startY: 0, panX: 0, panY: 0 });
+  const externalOperationNonceRef = useRef(null);
+  const touchRef = useRef({
+    mode: null,
+    touchId: null,
+    startX: 0,
+    startY: 0,
+    panX: 0,
+    panY: 0,
+    pinchDistance: 0,
+    pinchZoom: 1,
+    pinchPanX: 0,
+    pinchPanY: 0,
+    pinchCenterX: 0,
+    pinchCenterY: 0,
+  });
   const canvasRef = useRef(null);
   const resizeTimeoutRef = useRef(null);
   const traversalTimerRef = useRef(null);
@@ -758,17 +1007,31 @@ function TreeWorkspace({
   const hasTypeInitializedRef = useRef(false);
   const restoredTypeRef = useRef(null);
   const speedMenuRef = useRef(null);
+  const replaySidebarRef = useRef(null);
+  const actionModalInputRef = useRef(null);
+  const panRef = useRef({ x: 0, y: 0 });
+  const zoomRef = useRef(1);
+  const wheelPanBufferRef = useRef({ x: 0, y: 0 });
+  const wheelPanRafRef = useRef(null);
   const historySignature = useMemo(() => getHistorySignature(history), [history]);
 
   const [transitionState, setTransitionState] = useState(null);
 
   const snapZoomValue = useCallback((value) => {
     const bounded = clamp(value, 0.1, 4);
-    return parseFloat((Math.round(bounded * 20) / 20).toFixed(2));
+    return parseFloat(bounded.toFixed(4));
   }, []);
 
   const renderedZoom = useMemo(() => snapZoomValue(zoom), [zoom, snapZoomValue]);
   const renderedPan = pan;
+
+  useEffect(() => {
+    panRef.current = pan;
+  }, [pan]);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
 
   const timelineFrame = timelineState.frames[timelineState.index] ?? null;
   const visualRoot = timelineFrame?.root ?? root;
@@ -822,48 +1085,83 @@ function TreeWorkspace({
     });
   }, [currentLayout, snapZoomValue]);
 
+  const applyZoomAroundPointer = useCallback((pointerX, pointerY, deltaY, sensitivity) => {
+    setZoom((currentZoom) => {
+      const zoomFactor = Math.exp(-deltaY * sensitivity);
+      const nextZoom = snapZoomValue(currentZoom * zoomFactor);
+
+      setPan((currentPan) => {
+        const worldX = (pointerX - currentPan.x) / currentZoom;
+        const worldY = (pointerY - currentPan.y) / currentZoom;
+
+        return {
+          x: pointerX - worldX * nextZoom,
+          y: pointerY - worldY * nextZoom,
+        };
+      });
+
+      return nextZoom;
+    });
+  }, [snapZoomValue]);
+
+  const flushWheelPanBuffer = useCallback(() => {
+    const { x, y } = wheelPanBufferRef.current;
+    wheelPanBufferRef.current = { x: 0, y: 0 };
+    wheelPanRafRef.current = null;
+
+    if (Math.abs(x) <= WHEEL_DEAD_ZONE && Math.abs(y) <= WHEEL_DEAD_ZONE) return;
+
+    setPan((currentPan) => ({
+      x: currentPan.x + x,
+      y: currentPan.y + y,
+    }));
+  }, []);
+
   const handleCanvasWheel = useCallback((event) => {
     event.preventDefault();
 
+    const { deltaX, deltaY } = normalizeWheelDeltas(event);
+    if (Math.abs(deltaX) <= WHEEL_DEAD_ZONE && Math.abs(deltaY) <= WHEEL_DEAD_ZONE) return;
+
     const isPinchGesture = event.ctrlKey || event.metaKey;
+    const svg = canvasRef.current;
+    if (!svg) return;
+
+    const rect = svg.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
 
     if (isPinchGesture) {
-      const svg = canvasRef.current;
-      if (!svg) return;
+      const clampedPinchDelta = clamp(deltaY, -PINCH_ZOOM_DELTA_LIMIT, PINCH_ZOOM_DELTA_LIMIT);
+      if (Math.abs(clampedPinchDelta) <= WHEEL_DEAD_ZONE) return;
 
-      const rect = svg.getBoundingClientRect();
-      const pointerX = event.clientX - rect.left;
-      const pointerY = event.clientY - rect.top;
+      applyZoomAroundPointer(pointerX, pointerY, clampedPinchDelta, PINCH_ZOOM_SENSITIVITY);
 
-      setZoom((currentZoom) => {
-        const zoomFactor = event.deltaY < 0 ? 1.08 : 0.92;
-        const nextZoom = snapZoomValue(currentZoom * zoomFactor);
+      return;
+    }
 
-        setPan((currentPan) => {
-          const worldX = (pointerX - currentPan.x) / currentZoom;
-          const worldY = (pointerY - currentPan.y) / currentZoom;
+    const usingMouseWheel = isLikelyMouseWheel(event, deltaX, deltaY);
 
-          return {
-            x: pointerX - worldX * nextZoom,
-            y: pointerY - worldY * nextZoom,
-          };
-        });
+    if (usingMouseWheel) {
+      const clampedWheelDelta = clamp(deltaY, -MOUSE_WHEEL_ZOOM_DELTA_LIMIT, MOUSE_WHEEL_ZOOM_DELTA_LIMIT);
+      if (Math.abs(clampedWheelDelta) <= WHEEL_DEAD_ZONE) return;
 
-        return nextZoom;
-      });
-
+      applyZoomAroundPointer(pointerX, pointerY, clampedWheelDelta, MOUSE_WHEEL_ZOOM_SENSITIVITY);
       return;
     }
 
     const panDirection = invertTrackpadPan ? -1 : 1;
 
-    setPan((currentPan) =>
-      ({
-        x: currentPan.x + event.deltaX * panDirection,
-        y: currentPan.y + event.deltaY * panDirection,
-      }),
-    );
-  }, [invertTrackpadPan, snapZoomValue]);
+    wheelPanBufferRef.current.x += clamp(deltaX, -TRACKPAD_PAN_DELTA_LIMIT, TRACKPAD_PAN_DELTA_LIMIT) * panDirection;
+    wheelPanBufferRef.current.y += clamp(deltaY, -TRACKPAD_PAN_DELTA_LIMIT, TRACKPAD_PAN_DELTA_LIMIT) * panDirection;
+
+    if (wheelPanRafRef.current !== null) return;
+
+    wheelPanRafRef.current = requestAnimationFrame(() => {
+      flushWheelPanBuffer();
+    });
+
+  }, [applyZoomAroundPointer, flushWheelPanBuffer, invertTrackpadPan]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -879,6 +1177,165 @@ function TreeWorkspace({
       canvas.removeEventListener("wheel", onWheel);
     };
   }, [handleCanvasWheel]);
+
+  const handleCanvasTouchStart = useCallback((event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    dragRef.current.active = false;
+
+    if (event.touches.length === 2) {
+      const [first, second] = event.touches;
+      const rect = canvas.getBoundingClientRect();
+      const center = getTouchCenter(first, second);
+
+      touchRef.current = {
+        ...touchRef.current,
+        mode: "pinch",
+        touchId: null,
+        pinchDistance: getTouchDistance(first, second),
+        pinchZoom: zoomRef.current,
+        pinchPanX: panRef.current.x,
+        pinchPanY: panRef.current.y,
+        pinchCenterX: center.x - rect.left,
+        pinchCenterY: center.y - rect.top,
+      };
+
+      setIsDragging(true);
+      event.preventDefault();
+      return;
+    }
+
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      touchRef.current = {
+        ...touchRef.current,
+        mode: "pan",
+        touchId: touch.identifier,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        panX: panRef.current.x,
+        panY: panRef.current.y,
+      };
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleCanvasTouchMove = useCallback((event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (touchRef.current.mode === "pinch" && event.touches.length === 2) {
+      const [first, second] = event.touches;
+      const nextDistance = getTouchDistance(first, second);
+      if (!touchRef.current.pinchDistance) return;
+
+      const zoomScale = nextDistance / touchRef.current.pinchDistance;
+      const nextZoom = snapZoomValue(touchRef.current.pinchZoom * zoomScale);
+
+      const baseZoom = Math.max(0.1, touchRef.current.pinchZoom);
+      const worldX = (touchRef.current.pinchCenterX - touchRef.current.pinchPanX) / baseZoom;
+      const worldY = (touchRef.current.pinchCenterY - touchRef.current.pinchPanY) / baseZoom;
+
+      setZoom(nextZoom);
+      zoomRef.current = nextZoom;
+      const nextPan = {
+        x: touchRef.current.pinchCenterX - worldX * nextZoom,
+        y: touchRef.current.pinchCenterY - worldY * nextZoom,
+      };
+      panRef.current = nextPan;
+      setPan(nextPan);
+
+      event.preventDefault();
+      return;
+    }
+
+    if (touchRef.current.mode !== "pan") return;
+
+    const touch = Array.from(event.touches).find((entry) => entry.identifier === touchRef.current.touchId)
+      ?? event.touches[0];
+    if (!touch) return;
+
+    const nextPan = {
+      x: touchRef.current.panX + touch.clientX - touchRef.current.startX,
+      y: touchRef.current.panY + touch.clientY - touchRef.current.startY,
+    };
+    panRef.current = nextPan;
+    setPan(nextPan);
+
+    event.preventDefault();
+  }, [snapZoomValue]);
+
+  const handleCanvasTouchEnd = useCallback((event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (!event.touches.length) {
+      touchRef.current.mode = null;
+      touchRef.current.touchId = null;
+      setIsDragging(false);
+      return;
+    }
+
+    if (event.touches.length === 2) {
+      const [first, second] = event.touches;
+      const rect = canvas.getBoundingClientRect();
+      const center = getTouchCenter(first, second);
+
+      touchRef.current = {
+        ...touchRef.current,
+        mode: "pinch",
+        touchId: null,
+        pinchDistance: getTouchDistance(first, second),
+        pinchZoom: zoomRef.current,
+        pinchPanX: panRef.current.x,
+        pinchPanY: panRef.current.y,
+        pinchCenterX: center.x - rect.left,
+        pinchCenterY: center.y - rect.top,
+      };
+      return;
+    }
+
+    const touch = event.touches[0];
+    touchRef.current = {
+      ...touchRef.current,
+      mode: "pan",
+      touchId: touch.identifier,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      panX: panRef.current.x,
+      panY: panRef.current.y,
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+
+    const onTouchStart = (event) => {
+      handleCanvasTouchStart(event);
+    };
+
+    const onTouchMove = (event) => {
+      handleCanvasTouchMove(event);
+    };
+
+    const onTouchEnd = (event) => {
+      handleCanvasTouchEnd(event);
+    };
+
+    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvas.addEventListener("touchend", onTouchEnd, { passive: false });
+    canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
+
+    return () => {
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", onTouchEnd);
+      canvas.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [handleCanvasTouchEnd, handleCanvasTouchMove, handleCanvasTouchStart]);
 
   useEffect(() => {
     fitCanvas();
@@ -934,6 +1391,7 @@ function TreeWorkspace({
     () => () => {
       if (traversalTimerRef.current) clearInterval(traversalTimerRef.current);
       if (transitionRafRef.current) cancelAnimationFrame(transitionRafRef.current);
+      if (wheelPanRafRef.current) cancelAnimationFrame(wheelPanRafRef.current);
     },
     [],
   );
@@ -1182,18 +1640,12 @@ function TreeWorkspace({
 
   const showTimelineSegmentTooltip = useCallback(
     ({ frame, index, clientX, clientY }) => {
-      const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
-      const tooltipHalfWidth = 176;
-      const safeX = viewportWidth
-        ? clamp(clientX, tooltipHalfWidth, Math.max(tooltipHalfWidth, viewportWidth - tooltipHalfWidth))
-        : clientX;
-
       setHoveredTimelineSegment({
         frame,
         index,
         total: timelineState.frames.length,
-        x: safeX,
-        y: clientY - 8,
+        x: clientX,
+        y: clientY,
       });
     },
     [timelineState.frames.length],
@@ -1202,6 +1654,26 @@ function TreeWorkspace({
   const hideTimelineSegmentTooltip = useCallback(() => {
     setHoveredTimelineSegment(null);
   }, []);
+
+  const showHintTooltip = useCallback((text, clientX, clientY) => {
+    if (!text) return;
+    setHoveredHint({ text, x: clientX, y: clientY });
+  }, []);
+
+  const hideHintTooltip = useCallback(() => {
+    setHoveredHint(null);
+  }, []);
+
+  const getHintTriggerProps = useCallback((text) => ({
+    onMouseEnter: (event) => showHintTooltip(text, event.clientX, event.clientY),
+    onMouseMove: (event) => showHintTooltip(text, event.clientX, event.clientY),
+    onMouseLeave: hideHintTooltip,
+    onFocus: (event) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      showHintTooltip(text, rect.left + rect.width / 2, rect.top);
+    },
+    onBlur: hideHintTooltip,
+  }), [hideHintTooltip, showHintTooltip]);
 
   useEffect(() => {
     if (!timelineState.frames.length) {
@@ -1262,6 +1734,22 @@ function TreeWorkspace({
     setOk(`Loaded replay: ${entry.title}`);
   };
 
+  useEffect(() => {
+    if (!externalOperationRequest) return;
+    if (externalOperationRequest.type !== type) return;
+    if (externalOperationRequest.nonce === externalOperationNonceRef.current) return;
+
+    const operationExists = operationHistory.some((candidate) => candidate.id === externalOperationRequest.operationId);
+    if (!operationExists) return;
+
+    externalOperationNonceRef.current = externalOperationRequest.nonce;
+    loadOperation(externalOperationRequest.operationId, false);
+
+    if (isMobileViewport) {
+      setLeftSidebarOpen(false);
+    }
+  }, [externalOperationRequest, type, isMobileViewport, operationHistory]);
+
   const jumpToFrame = (index) => {
     setTimelineState((prev) => {
       if (!prev.frames.length) return prev;
@@ -1275,6 +1763,11 @@ function TreeWorkspace({
 
   const parseInput = () => {
     const value = Number.parseInt(input, 10);
+    return Number.isNaN(value) ? null : value;
+  };
+
+  const parseActionModalValue = () => {
+    const value = Number.parseInt(actionModal.value, 10);
     return Number.isNaN(value) ? null : value;
   };
 
@@ -1315,8 +1808,8 @@ function TreeWorkspace({
     return true;
   };
 
-  const onInsert = () => {
-    const value = parseInput();
+  const onInsert = (explicitValue = null) => {
+    const value = explicitValue ?? parseInput();
     if (value === null) return setError("Enter an integer first.");
 
     const changed = runInsert(value, false);
@@ -1325,8 +1818,8 @@ function TreeWorkspace({
     setInput("");
   };
 
-  const onDelete = () => {
-    const value = parseInput();
+  const onDelete = (explicitValue = null) => {
+    const value = explicitValue ?? parseInput();
     if (value === null) return setError("Enter an integer first.");
 
     const beforeRoot = root;
@@ -1361,8 +1854,8 @@ function TreeWorkspace({
     setInput("");
   };
 
-  const onSearch = () => {
-    const value = parseInput();
+  const onSearch = (explicitValue = null) => {
+    const value = explicitValue ?? parseInput();
     if (value === null) return setError("Enter an integer first.");
 
     stopTraversal();
@@ -1381,6 +1874,72 @@ function TreeWorkspace({
     }
   };
 
+  const closeActionModal = useCallback(() => {
+    setActionModal({ open: false, type: null, value: "" });
+  }, []);
+
+  const openActionModal = useCallback(
+    (type) => {
+      if (isTimelinePlaying) return;
+      setActionModal({ open: true, type, value: "" });
+    },
+    [isTimelinePlaying],
+  );
+
+  const submitActionModal = useCallback(() => {
+    const value = parseActionModalValue();
+    if (value === null) {
+      setError("Enter an integer first.");
+      return;
+    }
+
+    if (actionModal.type === "insert") {
+      onInsert(value);
+    } else if (actionModal.type === "delete") {
+      onDelete(value);
+    } else if (actionModal.type === "search") {
+      onSearch(value);
+    }
+
+    closeActionModal();
+  }, [
+    actionModal.type,
+    actionModal.value,
+    closeActionModal,
+    onInsert,
+    onDelete,
+    onSearch,
+    parseActionModalValue,
+  ]);
+
+  useEffect(() => {
+    if (!actionModal.open) return undefined;
+
+    const input = actionModalInputRef.current;
+    if (input) {
+      input.focus();
+      input.select();
+    }
+
+    const onEscape = (event) => {
+      if (event.key === "Escape") {
+        closeActionModal();
+      }
+    };
+
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [actionModal.open, closeActionModal]);
+
+  const actionModalTitle =
+    actionModal.type === "insert"
+      ? "Insert value"
+      : actionModal.type === "delete"
+        ? "Delete value"
+        : "Search value";
+
   const onRandomInsert = () => {
     const allValues = new Set(inOrder(root));
     if (allValues.size >= 199) return setError("All values from 1 to 199 already exist.");
@@ -1390,6 +1949,24 @@ function TreeWorkspace({
     while (allValues.has(value));
 
     runInsert(value, true);
+  };
+
+  const onShowMin = () => {
+    const value = treeMin(root);
+    if (value === null) {
+      setError("Tree is empty.");
+      return;
+    }
+    setOk(`Minimum: ${value}`);
+  };
+
+  const onShowMax = () => {
+    const value = treeMax(root);
+    if (value === null) {
+      setError("Tree is empty.");
+      return;
+    }
+    setOk(`Maximum: ${value}`);
   };
 
   const onClearAll = () => {
@@ -1472,6 +2049,252 @@ function TreeWorkspace({
     setTimelineState((prev) => ({ ...prev, index: 0, playing: prev.frames.length > 1 }));
   };
 
+  const toggleLeftSidebar = useCallback(() => {
+    setLeftSidebarOpen((current) => {
+      const next = !current;
+      if (isMobileViewport && next) {
+        setRightSidebarOpen(false);
+      }
+      return next;
+    });
+  }, [isMobileViewport]);
+
+  const toggleRightSidebar = useCallback(() => {
+    setRightSidebarOpen((current) => {
+      const next = !current;
+      if (isMobileViewport && next) {
+        setLeftSidebarOpen(false);
+      }
+      return next;
+    });
+  }, [isMobileViewport]);
+
+  const renderPlaybackDock = (extraClassName = "") => (
+    <div className={`playback-dock ${extraClassName}`.trim()} role="group" aria-label="Timeline playback controls">
+      <div className="timeline-slider-row">
+        <div
+          className="timeline-splits timeline-splits-track"
+          role="group"
+          aria-label="Timeline frame segments"
+          style={{
+            gridTemplateColumns: `repeat(${Math.max(1, timelineState.frames.length)}, minmax(10px, 1fr))`,
+          }}
+        >
+          {timelineHasFrames ? (
+            timelineState.frames.map((frame, index) => (
+              <button
+                key={`${frame.label}-${index}`}
+                type="button"
+                className={`timeline-split ${
+                  index === timelineState.index ? "active" : index < timelineState.index ? "past" : ""
+                }`}
+                onClick={() => jumpToFrame(index)}
+                onMouseEnter={(event) =>
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                  })
+                }
+                onMouseMove={(event) =>
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                  })
+                }
+                onMouseLeave={hideTimelineSegmentTooltip}
+                onFocus={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: rect.left + rect.width / 2,
+                    clientY: rect.top,
+                  });
+                }}
+                onBlur={hideTimelineSegmentTooltip}
+                aria-label={`Go to frame ${index + 1}: ${frame.label}`}
+              />
+            ))
+          ) : (
+            <span className="timeline-split inactive" aria-hidden="true" />
+          )}
+        </div>
+      </div>
+
+      <TimelineSegmentTooltip hoveredSegment={hoveredTimelineSegment} />
+
+      <div className="playback-controls-row">
+        <ActionButton onClick={timelineBack} disabled={!timelineHasFrames} icon={SkipBack}>Prev</ActionButton>
+        <ActionButton onClick={toggleTimelinePlay} disabled={!timelineHasFrames} icon={timelineState.playing ? Pause : Play}>
+          {timelineState.playing ? "Pause" : "Play"}
+        </ActionButton>
+        <ActionButton onClick={timelineNext} disabled={!timelineHasFrames} icon={SkipForward}>Next</ActionButton>
+        <ActionButton onClick={replayTimeline} disabled={!timelineHasFrames} icon={RotateCcw}>Replay</ActionButton>
+
+        <div className="speed-dropdown-wrap" ref={speedMenuRef}>
+          <span className="speed-label">Speed</span>
+          <button
+            type="button"
+            className="speed-dropdown-btn"
+            onClick={() => setSpeedMenuOpen((open) => !open)}
+            aria-expanded={speedMenuOpen}
+            aria-haspopup="listbox"
+            aria-label="Select timeline speed"
+          >
+            <span>{timelineSpeed}x</span>
+            <span className="speed-caret" aria-hidden="true"><ChevronDown size={14} /></span>
+          </button>
+          {speedMenuOpen && (
+            <ul className="speed-dropdown-menu" role="listbox" aria-label="Timeline speed options">
+              {SPEED_OPTIONS.map((speed) => (
+                <li key={speed}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={timelineSpeed === speed}
+                    className={`speed-option-btn ${timelineSpeed === speed ? "active" : ""}`}
+                    onClick={() => {
+                      setTimelineSpeed(speed);
+                      setSpeedMenuOpen(false);
+                    }}
+                  >
+                    {speed}x
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <span className="sequence-readout compact">
+          {timelineHasFrames
+            ? `Frame ${timelineState.index + 1}/${timelineState.frames.length}`
+            : "No modification timeline yet."}
+        </span>
+      </div>
+    </div>
+  );
+
+  const renderMobileSeekBar = () => (
+    <div className="mobile-seekbar-dock" role="group" aria-label="Timeline seek bar">
+      <div className="timeline-slider-row">
+        <div
+          className="timeline-splits timeline-splits-track"
+          role="group"
+          aria-label="Timeline frame segments"
+          style={{
+            gridTemplateColumns: `repeat(${Math.max(1, timelineState.frames.length)}, minmax(10px, 1fr))`,
+          }}
+        >
+          {timelineHasFrames ? (
+            timelineState.frames.map((frame, index) => (
+              <button
+                key={`mobile-${frame.label}-${index}`}
+                type="button"
+                className={`timeline-split ${
+                  index === timelineState.index ? "active" : index < timelineState.index ? "past" : ""
+                }`}
+                onClick={() => jumpToFrame(index)}
+                onMouseEnter={(event) =>
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                  })
+                }
+                onMouseMove={(event) =>
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                  })
+                }
+                onMouseLeave={hideTimelineSegmentTooltip}
+                onFocus={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  showTimelineSegmentTooltip({
+                    frame,
+                    index,
+                    clientX: rect.left + rect.width / 2,
+                    clientY: rect.top,
+                  });
+                }}
+                onBlur={hideTimelineSegmentTooltip}
+                aria-label={`Go to frame ${index + 1}: ${frame.label}`}
+              />
+            ))
+          ) : (
+            <span className="timeline-split inactive" aria-hidden="true" />
+          )}
+        </div>
+      </div>
+      <div className="mobile-seekbar-controls" role="group" aria-label="Timeline playback controls">
+        <button
+          type="button"
+          className="mobile-seekbar-control-btn"
+          onClick={timelineBack}
+          disabled={!timelineHasFrames}
+          aria-label="Previous frame"
+          {...getHintTriggerProps("Previous frame")}
+        >
+          <SkipBack size={15} className="btn-icon" />
+        </button>
+        <button
+          type="button"
+          className="mobile-seekbar-control-btn mobile-seekbar-control-btn-play"
+          onClick={toggleTimelinePlay}
+          disabled={!timelineHasFrames}
+          aria-label={timelineState.playing ? "Pause timeline" : "Play timeline"}
+          {...getHintTriggerProps(timelineState.playing ? "Pause timeline" : "Play timeline")}
+        >
+          {timelineState.playing ? <Pause size={16} className="btn-icon" /> : <Play size={16} className="btn-icon" />}
+        </button>
+        <button
+          type="button"
+          className="mobile-seekbar-control-btn"
+          onClick={timelineNext}
+          disabled={!timelineHasFrames}
+          aria-label="Next frame"
+          {...getHintTriggerProps("Next frame")}
+        >
+          <SkipForward size={15} className="btn-icon" />
+        </button>
+      </div>
+      <span className="sequence-readout compact mobile-seekbar-label">
+        {timelineHasFrames
+          ? `Frame ${timelineState.index + 1}/${timelineState.frames.length}`
+          : "No modification timeline yet."}
+      </span>
+      <TimelineSegmentTooltip hoveredSegment={hoveredTimelineSegment} />
+    </div>
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const media = window.matchMedia("(max-width: 760px)");
+    const applyMobileState = (matches) => {
+      setIsMobileViewport(matches);
+      setLeftSidebarOpen((prev) => (matches ? false : prev));
+      setRightSidebarOpen((prev) => (matches ? false : prev));
+    };
+
+    applyMobileState(media.matches);
+
+    const handleChange = (event) => applyMobileState(event.matches);
+    media.addEventListener("change", handleChange);
+
+    return () => {
+      media.removeEventListener("change", handleChange);
+    };
+  }, []);
+
   const typeLegend =
     type === "AVL"
       ? [
@@ -1512,35 +2335,29 @@ function TreeWorkspace({
   };
 
   const extraMetric = config.extraMetric(root);
+  const showHistorySection = !isMobileViewport;
+  const workspaceLayoutClassName = isMobileViewport
+    ? "workspace-layout mobile-mode"
+    : `workspace-layout ${leftSidebarOpen ? "" : "left-sidebar-collapsed"} ${
+        rightSidebarOpen ? "" : "right-sidebar-collapsed"
+      }`.trim();
+
   return (
     <section className="workspace">
       <div
-        className={`workspace-layout ${leftSidebarOpen ? "" : "left-sidebar-collapsed"} ${
-          rightSidebarOpen ? "" : "right-sidebar-collapsed"
-        }`.trim()}
+        className={workspaceLayoutClassName}
       >
-        <aside className={`control-sidebar ${leftSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Control panel">
+        {!isMobileViewport && (
+          <aside className={`control-sidebar ${leftSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Control panel">
           <section className="sidebar-section">
             <div className="section-heading-row">
               <h2>Actions</h2>
             </div>
 
-            <label htmlFor="tree-value-input" className="input-label">Value</label>
-            <input
-              id="tree-value-input"
-              value={input}
-              type="number"
-              placeholder="integer"
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && onInsert()}
-              className="value-input"
-              disabled={isTimelinePlaying}
-            />
-
             <div className="action-grid">
-              <ActionButton variant="success" onClick={onInsert} disabled={isTimelinePlaying} icon={Plus}>Insert</ActionButton>
-              <ActionButton variant="danger" onClick={onDelete} disabled={isTimelinePlaying} icon={Trash2}>Delete</ActionButton>
-              <ActionButton onClick={onSearch} disabled={isTimelinePlaying} icon={Search}>Search</ActionButton>
+              <ActionButton variant="success" onClick={() => openActionModal("insert")} disabled={isTimelinePlaying} icon={Plus}>Insert</ActionButton>
+              <ActionButton variant="danger" onClick={() => openActionModal("delete")} disabled={isTimelinePlaying} icon={Trash2}>Delete</ActionButton>
+              <ActionButton onClick={() => openActionModal("search")} disabled={isTimelinePlaying} icon={Search}>Search</ActionButton>
               <ActionButton onClick={onClearAll} disabled={isTimelinePlaying} icon={Trash}>Clear All</ActionButton>
             </div>
 
@@ -1548,22 +2365,14 @@ function TreeWorkspace({
               <summary>More actions</summary>
               <div className="secondary-actions-body">
                 <ActionButton
-                  onClick={() =>
-                    treeMin(root) === null
-                      ? setError("Tree is empty.")
-                      : setOk(`Minimum: ${treeMin(root)}`)
-                  }
+                  onClick={onShowMin}
                   disabled={isTimelinePlaying}
                   icon={ArrowDownToLine}
                 >
                   Min
                 </ActionButton>
                 <ActionButton
-                  onClick={() =>
-                    treeMax(root) === null
-                      ? setError("Tree is empty.")
-                      : setOk(`Maximum: ${treeMax(root)}`)
-                  }
+                  onClick={onShowMax}
                   disabled={isTimelinePlaying}
                   icon={ArrowUpToLine}
                 >
@@ -1626,21 +2435,24 @@ function TreeWorkspace({
               <LegendDot fill="#fef3c7" stroke="#92400e" ring="#d97706" label="Delete / replace" />
             </div>
           </section>
-        </aside>
+          </aside>
+        )}
 
         <section className="canvas-stage" aria-label="Tree visualization">
-          <div className="canvas-overlay stats-overlay-group">
-            <button
-              type="button"
-              className="sidebar-toggle-btn canvas-top-btn icon-toggle"
-              aria-label={leftSidebarOpen ? "Hide left sidebar" : "Show left sidebar"}
-              aria-expanded={leftSidebarOpen}
-              onClick={() => setLeftSidebarOpen((value) => !value)}
-            >
-              <span aria-hidden="true" className="toggle-icon">
-                {leftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-              </span>
-            </button>
+          <div className="stats-overlay-group" role="group" aria-label="Tree statistics and layout controls">
+            {!isMobileViewport && (
+              <button
+                type="button"
+                className="sidebar-toggle-btn canvas-top-btn icon-toggle"
+                aria-label={leftSidebarOpen ? "Hide left sidebar" : "Show left sidebar"}
+                aria-expanded={leftSidebarOpen}
+                onClick={toggleLeftSidebar}
+              >
+                <span aria-hidden="true" className="toggle-icon">
+                  {leftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+                </span>
+              </button>
+            )}
 
             <div className="stats-overlay" aria-label="Tree statistics">
               <span>Nodes: <b>{treeSize(root)}</b></span>
@@ -1651,42 +2463,182 @@ function TreeWorkspace({
               <span>Max: <b>{treeMax(root) ?? "-"}</b></span>
               {extraMetric && <span>{extraMetric}</span>}
             </div>
+
+            {!isMobileViewport && (
+              <button
+                type="button"
+                className="sidebar-toggle-btn canvas-top-btn icon-toggle"
+                aria-label={rightSidebarOpen ? "Hide right sidebar" : "Show right sidebar"}
+                aria-expanded={rightSidebarOpen}
+                onClick={toggleRightSidebar}
+              >
+                <span aria-hidden="true" className="toggle-icon">
+                  {rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+                </span>
+              </button>
+            )}
           </div>
 
-          <div className="canvas-overlay right-sidebar-overlay">
-            <button
-              type="button"
-              className="sidebar-toggle-btn canvas-top-btn icon-toggle"
-              aria-label={rightSidebarOpen ? "Hide right sidebar" : "Show right sidebar"}
-              aria-expanded={rightSidebarOpen}
-              onClick={() => setRightSidebarOpen((value) => !value)}
-            >
-              <span aria-hidden="true" className="toggle-icon">
-                {rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
-              </span>
-            </button>
-          </div>
+          {isMobileViewport && (
+            <>
+              <div className="mobile-fab-rail mobile-fab-rail-left" role="group" aria-label="Traversal and utility actions">
+                {TRAVERSALS.map((option) => (
+                  <button
+                    key={`mobile-${option.key}`}
+                    type="button"
+                    className={`btn mobile-fab-btn mobile-fab-text ${traversal.name === option.label ? "active" : ""}`}
+                    onClick={() => startTraversal(option.label, option.run)}
+                    disabled={isTimelinePlaying}
+                    aria-label={option.label}
+                    {...getHintTriggerProps(option.label)}
+                  >
+                    {option.label.split("-")[0]}
+                  </button>
+                ))}
 
-          <div className="zoom-controls vertical" role="group" aria-label="Zoom controls">
-            <button
-              type="button"
-              onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
-              aria-label="Zoom in"
-            >
-              <ZoomIn size={14} className="btn-icon" />
-            </button>
-            <span>{Math.round(renderedZoom * 100)}%</span>
-            <button
-              type="button"
-              onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
-              aria-label="Zoom out"
-            >
-              <ZoomOut size={14} className="btn-icon" />
-            </button>
-            <button type="button" onClick={fitCanvas} aria-label="Fit tree to canvas">
-              <Maximize size={14} className="btn-icon" />
-            </button>
-          </div>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={onShowMin}
+                  disabled={isTimelinePlaying}
+                  aria-label="Show minimum"
+                  {...getHintTriggerProps("Show minimum")}
+                >
+                  <ArrowDownToLine size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={onShowMax}
+                  disabled={isTimelinePlaying}
+                  aria-label="Show maximum"
+                  {...getHintTriggerProps("Show maximum")}
+                >
+                  <ArrowUpToLine size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={onRandomInsert}
+                  disabled={isTimelinePlaying}
+                  aria-label="Random insert"
+                  {...getHintTriggerProps("Random insert")}
+                >
+                  <Dices size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={clearSearch}
+                  aria-label="Clear highlight"
+                  {...getHintTriggerProps("Clear highlight")}
+                >
+                  <Eraser size={16} className="btn-icon" />
+                </button>
+              </div>
+
+              <div className="mobile-fab-rail mobile-fab-rail-right" role="group" aria-label="Tree and replay actions">
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn mobile-fab-btn-positive"
+                  onClick={() => openActionModal("insert")}
+                  disabled={isTimelinePlaying}
+                  aria-label="Insert"
+                  {...getHintTriggerProps("Insert")}
+                >
+                  <Plus size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn mobile-fab-btn-negative"
+                  onClick={() => openActionModal("delete")}
+                  disabled={isTimelinePlaying}
+                  aria-label="Delete"
+                  {...getHintTriggerProps("Delete")}
+                >
+                  <Trash2 size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={() => openActionModal("search")}
+                  disabled={isTimelinePlaying}
+                  aria-label="Search"
+                  {...getHintTriggerProps("Search")}
+                >
+                  <Search size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={onClearAll}
+                  disabled={isTimelinePlaying}
+                  aria-label="Clear all"
+                  {...getHintTriggerProps("Clear all")}
+                >
+                  <Trash size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
+                  aria-label="Zoom in"
+                  {...getHintTriggerProps("Zoom in")}
+                >
+                  <ZoomIn size={16} className="btn-icon" />
+                </button>
+                <div
+                  className="mobile-fab-btn mobile-fab-zoom-readout"
+                  role="status"
+                  aria-label={`Zoom level ${Math.round(renderedZoom * 100)} percent`}
+                >
+                  {Math.round(renderedZoom * 100)}%
+                </div>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
+                  aria-label="Zoom out"
+                  {...getHintTriggerProps("Zoom out")}
+                >
+                  <ZoomOut size={16} className="btn-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="btn mobile-fab-btn"
+                  onClick={fitCanvas}
+                  aria-label="Fit tree to canvas"
+                  {...getHintTriggerProps("Fit tree to canvas")}
+                >
+                  <Maximize size={16} className="btn-icon" />
+                </button>
+
+              </div>
+            </>
+          )}
+
+          {!isMobileViewport && (
+            <div className="zoom-controls vertical" role="group" aria-label="Zoom controls">
+              <button
+                type="button"
+                onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
+                aria-label="Zoom in"
+              >
+                <ZoomIn size={14} className="btn-icon" />
+              </button>
+              <span>{Math.round(renderedZoom * 100)}%</span>
+              <button
+                type="button"
+                onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
+                aria-label="Zoom out"
+              >
+                <ZoomOut size={14} className="btn-icon" />
+              </button>
+              <button type="button" onClick={fitCanvas} aria-label="Fit tree to canvas">
+                <Maximize size={14} className="btn-icon" />
+              </button>
+            </div>
+          )}
 
           <div className="canvas-shell">
             {!visualRoot && <div className="empty-state">Tree is empty. Insert a value to start.</div>}
@@ -1893,120 +2845,18 @@ function TreeWorkspace({
             />
           </div>
 
-          <div className="playback-dock" role="group" aria-label="Timeline playback controls">
-            <div className="timeline-slider-row">
-              <div
-                className="timeline-splits timeline-splits-track"
-                role="group"
-                aria-label="Timeline frame segments"
-                style={{
-                  gridTemplateColumns: `repeat(${Math.max(1, timelineState.frames.length)}, minmax(10px, 1fr))`,
-                }}
-              >
-                {timelineHasFrames ? (
-                  timelineState.frames.map((frame, index) => (
-                    <button
-                      key={`${frame.label}-${index}`}
-                      type="button"
-                      className={`timeline-split ${
-                        index === timelineState.index ? "active" : index < timelineState.index ? "past" : ""
-                      }`}
-                      onClick={() => jumpToFrame(index)}
-                      onMouseEnter={(event) =>
-                        showTimelineSegmentTooltip({
-                          frame,
-                          index,
-                          clientX: event.clientX,
-                          clientY: event.clientY,
-                        })
-                      }
-                      onMouseMove={(event) =>
-                        showTimelineSegmentTooltip({
-                          frame,
-                          index,
-                          clientX: event.clientX,
-                          clientY: event.clientY,
-                        })
-                      }
-                      onMouseLeave={hideTimelineSegmentTooltip}
-                      onFocus={(event) => {
-                        const rect = event.currentTarget.getBoundingClientRect();
-                        showTimelineSegmentTooltip({
-                          frame,
-                          index,
-                          clientX: rect.left + rect.width / 2,
-                          clientY: rect.top,
-                        });
-                      }}
-                      onBlur={hideTimelineSegmentTooltip}
-                      aria-label={`Go to frame ${index + 1}: ${frame.label}`}
-                      title={`Frame ${index + 1}: ${frame.label}`}
-                    />
-                  ))
-                ) : (
-                  <span className="timeline-split inactive" aria-hidden="true" />
-                )}
-              </div>
-            </div>
+          {isMobileViewport && renderMobileSeekBar()}
 
-            <TimelineSegmentTooltip hoveredSegment={hoveredTimelineSegment} />
-
-            <div className="playback-controls-row">
-              <ActionButton onClick={timelineBack} disabled={!timelineHasFrames} icon={SkipBack}>Prev</ActionButton>
-              <ActionButton onClick={toggleTimelinePlay} disabled={!timelineHasFrames} icon={timelineState.playing ? Pause : Play}>
-                {timelineState.playing ? "Pause" : "Play"}
-              </ActionButton>
-              <ActionButton onClick={timelineNext} disabled={!timelineHasFrames} icon={SkipForward}>Next</ActionButton>
-              <ActionButton onClick={replayTimeline} disabled={!timelineHasFrames} icon={RotateCcw}>Replay</ActionButton>
-
-              <div className="speed-dropdown-wrap" ref={speedMenuRef}>
-                <span className="speed-label">Speed</span>
-                <button
-                  type="button"
-                  className="speed-dropdown-btn"
-                  onClick={() => setSpeedMenuOpen((open) => !open)}
-                  aria-expanded={speedMenuOpen}
-                  aria-haspopup="listbox"
-                  aria-label="Select timeline speed"
-                >
-                  <span>{timelineSpeed}x</span>
-                  <span className="speed-caret" aria-hidden="true"><ChevronDown size={14} /></span>
-                </button>
-                {speedMenuOpen && (
-                  <ul className="speed-dropdown-menu" role="listbox" aria-label="Timeline speed options">
-                    {SPEED_OPTIONS.map((speed) => (
-                      <li key={speed}>
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={timelineSpeed === speed}
-                          className={`speed-option-btn ${timelineSpeed === speed ? "active" : ""}`}
-                          onClick={() => {
-                            setTimelineSpeed(speed);
-                            setSpeedMenuOpen(false);
-                          }}
-                        >
-                          {speed}x
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <span className="sequence-readout compact">
-                {timelineHasFrames
-                  ? `Frame ${timelineState.index + 1}/${timelineState.frames.length}`
-                  : "No modification timeline yet."}
-              </span>
-            </div>
-          </div>
+          {!isMobileViewport && renderPlaybackDock()}
         </section>
 
         <aside className={`replay-sidebar ${rightSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Timeline and operation history">
           <span className={`status-pill ${message.ok ? "good" : "bad"}`}>{message.text}</span>
 
-          <section className="sidebar-section timeline-details">
+          <section
+            className="sidebar-section timeline-details"
+            style={isMobileViewport ? { display: "none" } : undefined}
+          >
             <div className="section-heading-row">
               <h2>Timeline</h2>
               <span className="section-meta">
@@ -2025,7 +2875,14 @@ function TreeWorkspace({
             <p className="frame-explanation">{frameExplanation}</p>
           </section>
 
-          <section className="sidebar-section history-sidebar" id="operation-history-list">
+          {isMobileViewport && renderPlaybackDock("playback-dock-inline")}
+
+          <section
+            className="sidebar-section history-sidebar"
+            id="operation-history-list"
+            hidden={!showHistorySection}
+            style={isMobileViewport ? { display: "none" } : undefined}
+          >
             <div className="history-header">
               <span>Operation History ({operationHistory.length})</span>
               <button
@@ -2060,16 +2917,47 @@ function TreeWorkspace({
           </section>
         </aside>
       </div>
+
+      <HintTooltip hoveredHint={hoveredHint} />
+
+      {actionModal.open && (
+        <div className="modal-backdrop" role="presentation" onClick={closeActionModal}>
+          <section
+            className="action-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="action-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="action-modal-title">{actionModalTitle}</h2>
+            <label htmlFor="action-modal-value" className="input-label">Value</label>
+            <input
+              ref={actionModalInputRef}
+              id="action-modal-value"
+              value={actionModal.value}
+              type="number"
+              inputMode="numeric"
+              enterKeyHint="done"
+              placeholder="integer"
+              onChange={(event) => setActionModal((prev) => ({ ...prev, value: event.target.value }))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitActionModal();
+              }}
+              className="value-input"
+            />
+            <div className="action-modal-actions">
+              <button type="button" className="btn" onClick={closeActionModal}>Cancel</button>
+              <button type="button" className="btn success" onClick={submitActionModal}>Enter</button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }
 
 export default function App() {
   const persistedRef = useRef(readPersistedState());
-  const headerRowRef = useRef(null);
-  const headerSwitcherRef = useRef(null);
-  const settingsBtnRef = useRef(null);
-  const titleRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState(persistedRef.current.app.activeTab);
   const [treeType, setTreeType] = useState(persistedRef.current.app.treeType);
@@ -2080,7 +2968,31 @@ export default function App() {
   );
   const [sessionsByType, setSessionsByType] = useState(persistedRef.current.sessionsByType);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [useCompactTitle, setUseCompactTitle] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [hoveredHeaderHint, setHoveredHeaderHint] = useState(null);
+  const [headerOperationRequest, setHeaderOperationRequest] = useState(null);
+
+  const headerOperationItems = useMemo(() => {
+    const historyItems = sessionsByType?.[treeType]?.operationHistory;
+    if (!Array.isArray(historyItems)) return [];
+    return historyItems.slice(0, 12).map((entry) => ({
+      ...entry,
+      headerText: formatHeaderHistoryEntry(entry),
+    }));
+  }, [sessionsByType, treeType]);
+
+  const handleHeaderOperationSelect = useCallback(
+    (operationId) => {
+      setActiveTab(TYPE_TO_TAB[treeType]);
+      setMobileMenuOpen(false);
+      setHeaderOperationRequest({
+        type: treeType,
+        operationId,
+        nonce: Date.now(),
+      });
+    },
+    [treeType],
+  );
 
   useEffect(() => {
     writePersistedState({
@@ -2227,74 +3139,48 @@ export default function App() {
 
   const switchTab = (tabKey) => {
     setActiveTab(tabKey);
+    setMobileMenuOpen(false);
     if (tabKey !== "learn" && TAB_TO_TYPE[tabKey] !== treeType) convertTo(TAB_TO_TYPE[tabKey]);
   };
+
+  const showHeaderHint = useCallback((text, clientX, clientY) => {
+    if (!text) return;
+    setHoveredHeaderHint({ text, x: clientX, y: clientY });
+  }, []);
+
+  const hideHeaderHint = useCallback(() => {
+    setHoveredHeaderHint(null);
+  }, []);
+
+  const getHeaderHintTriggerProps = useCallback((text) => ({
+    onMouseEnter: (event) => showHeaderHint(text, event.clientX, event.clientY),
+    onMouseMove: (event) => showHeaderHint(text, event.clientX, event.clientY),
+    onMouseLeave: hideHeaderHint,
+    onFocus: (event) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      showHeaderHint(text, rect.left + rect.width / 2, rect.top);
+    },
+    onBlur: hideHeaderHint,
+  }), [hideHeaderHint, showHeaderHint]);
 
   const tabs = [
     { key: "learn", label: "Concepts" },
     ...TREE_TYPE_ORDER.map((key) => ({ key: TREE_CONFIG[key].tab, label: TREE_CONFIG[key].shortLabel })),
   ];
 
-  const recalculateHeaderTitle = useCallback(() => {
-    const row = headerRowRef.current;
-    const switcher = headerSwitcherRef.current;
-    const settingsButton = settingsBtnRef.current;
-    const titleElement = titleRef.current;
-
-    if (!row || !switcher || !settingsButton || !titleElement) return;
-
-    const rowWidth = row.getBoundingClientRect().width;
-    const switcherWidth = Math.max(330, switcher.getBoundingClientRect().width, switcher.scrollWidth);
-    const headerButtonsWidth = settingsButton.getBoundingClientRect().width;
-
-    const style = window.getComputedStyle(titleElement);
-    const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-
-    let fullTitleWidth = titleElement.scrollWidth;
-    if (context) {
-      context.font = font;
-      fullTitleWidth = Math.ceil(context.measureText(APP_TITLE_FULL).width);
-    }
-
-    const spacingAllowance = 60;
-    const requiredWidth = switcherWidth + headerButtonsWidth + fullTitleWidth + spacingAllowance;
-
-    setUseCompactTitle(requiredWidth > rowWidth);
-  }, []);
-
   useEffect(() => {
-    recalculateHeaderTitle();
-
-    const observer = new ResizeObserver(() => {
-      recalculateHeaderTitle();
-    });
-
-    if (headerRowRef.current) observer.observe(headerRowRef.current);
-    if (headerSwitcherRef.current) observer.observe(headerSwitcherRef.current);
-    if (settingsBtnRef.current) observer.observe(settingsBtnRef.current);
-
-    window.addEventListener("resize", recalculateHeaderTitle);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", recalculateHeaderTitle);
-    };
-  }, [recalculateHeaderTitle]);
-
-  useEffect(() => {
-    if (!settingsOpen) return undefined;
+    if (!settingsOpen && !mobileMenuOpen) return undefined;
 
     const closeOnEscape = (event) => {
       if (event.key === "Escape") {
         setSettingsOpen(false);
+        setMobileMenuOpen(false);
       }
     };
 
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [settingsOpen]);
+  }, [settingsOpen, mobileMenuOpen]);
 
   return (
     <>
@@ -2302,10 +3188,48 @@ export default function App() {
 
       <main id="maincontent" className="app-shell" tabIndex={-1}>
         <header className="app-header">
-          <div className="app-header-row" ref={headerRowRef}>
-            <div className="app-header-main">
-              <h1 ref={titleRef}>{useCompactTitle ? APP_TITLE_COMPACT : APP_TITLE_FULL}</h1>
-              <div ref={headerSwitcherRef} className="app-header-switcher-wrap">
+          <div className="app-header-row">
+            <h1>{APP_TITLE_COMPACT}</h1>
+
+            {activeTab !== "learn" && (
+              <div className="header-history-marquee" role="navigation" aria-label="Recent operation history">
+                <span className="header-history-label">Recent</span>
+                <div className="header-history-track">
+                  {headerOperationItems.length === 0 ? (
+                    <span className="header-history-empty">No operations yet</span>
+                  ) : (
+                    headerOperationItems.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        className="header-history-item"
+                        onClick={() => handleHeaderOperationSelect(entry.id)}
+                        {...getHeaderHintTriggerProps(entry.headerText)}
+                        aria-label={entry.headerText}
+                      >
+                        {entry.headerText}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+
+
+            <button
+              type="button"
+              className={`app-header-menu-toggle ${mobileMenuOpen ? "active" : ""}`.trim()}
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="app-header-menu"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+
+            <div id="app-header-menu" className={`app-header-menu ${mobileMenuOpen ? "open" : ""}`.trim()}>
+              <div className="app-header-switcher-wrap">
                 <ConceptSwitcher
                   tabs={tabs}
                   activeTab={activeTab}
@@ -2313,18 +3237,17 @@ export default function App() {
                   className="app-header-switcher"
                 />
               </div>
-            </div>
-            <div className="header-actions">
-              <button
-                type="button"
-                className="settings-btn"
-                ref={settingsBtnRef}
-                onClick={() => setSettingsOpen(true)}
-                aria-haspopup="dialog"
-                aria-expanded={settingsOpen}
-              >
-                <SlidersHorizontal size={14} /> Settings
-              </button>
+              <div className="header-actions">
+                <button
+                  type="button"
+                  className="settings-btn"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={settingsOpen}
+                >
+                  <SlidersHorizontal size={14} /> Settings
+                </button>
+              </div>
             </div>
           </div>
         </header>
@@ -2349,9 +3272,12 @@ export default function App() {
               session={sessionsByType[treeType]}
               onSessionChange={updateCurrentSession}
               invertTrackpadPan={settings.invertTrackpadPan}
+              externalOperationRequest={headerOperationRequest}
             />
           </section>
         )}
+
+        <HintTooltip hoveredHint={hoveredHeaderHint} />
       </main>
 
       {settingsOpen && (
@@ -2383,7 +3309,7 @@ export default function App() {
               <div className="setting-copy">
                 <h3>Invert trackpad pan</h3>
                 <p>
-                  Enabled means swipe up pans down and swipe left pans right. Disable if you prefer standard wheel mapping.
+                  Enabled means two-finger trackpad panning is inverted. Mouse wheel input always zooms, while pinch gestures zoom around your cursor.
                 </p>
               </div>
               <label className="setting-checkbox">
