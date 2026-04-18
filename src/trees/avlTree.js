@@ -70,18 +70,20 @@ export const avlBalanceFactor = (node) => balanceFactor(node);
 
 export const avlRootBalance = (root) => (root ? balanceFactor(root) : null);
 
-const treeSignature = (node) =>
-  !node ? "#" : `${node.val}:${node.h}|${treeSignature(node.left)}|${treeSignature(node.right)}`;
-
-const rebuildFromTrail = (subtree, trail) => {
+// Optimized: rebuild from mutable trail (avoids per-call array copy)
+const rebuildFromTrail = (subtree, trail, trailLen) => {
   let next = subtree;
-  for (let i = trail.length - 1; i >= 0; i -= 1) {
-    const { node, dir } = trail[i];
-    next = dir === "left" ? { ...node, left: next } : { ...node, right: next };
+  for (let i = trailLen - 1; i >= 0; i -= 1) {
+    const entry = trail[i];
+    next = entry.dir === "left" ? { ...entry.node, left: next } : { ...entry.node, right: next };
   }
   return next;
 };
 
+// Optimized: counter-based dedup instead of expensive full-tree signature.
+// Only skips when consecutive frames have the same label AND the same focus set,
+// which covers the redundant duplicate case without O(n) tree hashing.
+let _traceCounter = 0;
 const pushTraceFrame = (
   frames,
   {
@@ -92,13 +94,13 @@ const pushTraceFrame = (
     kind = "step",
   },
 ) => {
-  const signature = treeSignature(root);
-  const previous = frames[frames.length - 1];
-  if (previous && previous.signature === signature && previous.label === label) return;
-  frames.push({ label, root, focus, explanation, kind, signature });
+  const prev = frames[frames.length - 1];
+  if (prev && prev.label === label && prev._focusKey === focus.join(",")) return;
+  _traceCounter += 1;
+  frames.push({ label, root, focus, explanation, kind, _focusKey: focus.join(","), _id: _traceCounter });
 };
 
-const rebalanceWithTrace = (node, trail, frames) => {
+const rebalanceWithTrace = (node, trail, trailLen, frames) => {
   let next = withHeight(node);
   const bf = balanceFactor(next);
 
@@ -108,7 +110,7 @@ const rebalanceWithTrace = (node, trail, frames) => {
 
     pushTraceFrame(frames, {
       label: leftBf < 0 ? `AVL case LR at ${next.val}` : `AVL case LL at ${next.val}`,
-      root: rebuildFromTrail(next, trail),
+      root: rebuildFromTrail(next, trail, trailLen),
       focus: [next.val, leftChild?.val].filter(Boolean),
       explanation:
         leftBf < 0
@@ -120,7 +122,7 @@ const rebalanceWithTrace = (node, trail, frames) => {
     if (leftBf < 0 && leftChild) {
       pushTraceFrame(frames, {
         label: `Rotate left at ${leftChild.val} (prep)`,
-        root: rebuildFromTrail(next, trail),
+        root: rebuildFromTrail(next, trail, trailLen),
         focus: [leftChild.val, leftChild.right?.val].filter(Boolean),
         explanation: `First step of LR case: rotate left at child ${leftChild.val} so the heavier branch moves up.`,
         kind: "rotation",
@@ -128,7 +130,7 @@ const rebalanceWithTrace = (node, trail, frames) => {
       next = { ...next, left: rotateLeft(leftChild) };
       pushTraceFrame(frames, {
         label: `After prep rotation at ${leftChild.val}`,
-        root: rebuildFromTrail(next, trail),
+        root: rebuildFromTrail(next, trail, trailLen),
         focus: [next.val, next.left?.val].filter(Boolean),
         explanation: "Preparation complete. Now root and its new left child are ready for the final rotation.",
         kind: "rotation-result",
@@ -138,7 +140,7 @@ const rebalanceWithTrace = (node, trail, frames) => {
     const pivot = next.left?.val;
     pushTraceFrame(frames, {
       label: `Rotate right at ${next.val}`,
-      root: rebuildFromTrail(next, trail),
+      root: rebuildFromTrail(next, trail, trailLen),
       focus: [next.val, pivot].filter(Boolean),
       explanation: `Main balancing step: rotate right around ${next.val} with pivot ${pivot}.`,
       kind: "rotation",
@@ -147,7 +149,7 @@ const rebalanceWithTrace = (node, trail, frames) => {
     const rotated = rotateRight(next);
     pushTraceFrame(frames, {
       label: `After right rotation at ${next.val}`,
-      root: rebuildFromTrail(rotated, trail),
+      root: rebuildFromTrail(rotated, trail, trailLen),
       focus: [rotated.val, rotated.right?.val].filter(Boolean),
       explanation: `Subtree rooted at ${next.val} is now balanced after right rotation.`,
       kind: "rotation-result",
@@ -162,7 +164,7 @@ const rebalanceWithTrace = (node, trail, frames) => {
 
     pushTraceFrame(frames, {
       label: rightBf > 0 ? `AVL case RL at ${next.val}` : `AVL case RR at ${next.val}`,
-      root: rebuildFromTrail(next, trail),
+      root: rebuildFromTrail(next, trail, trailLen),
       focus: [next.val, rightChild?.val].filter(Boolean),
       explanation:
         rightBf > 0
@@ -174,7 +176,7 @@ const rebalanceWithTrace = (node, trail, frames) => {
     if (rightBf > 0 && rightChild) {
       pushTraceFrame(frames, {
         label: `Rotate right at ${rightChild.val} (prep)`,
-        root: rebuildFromTrail(next, trail),
+        root: rebuildFromTrail(next, trail, trailLen),
         focus: [rightChild.val, rightChild.left?.val].filter(Boolean),
         explanation: `First step of RL case: rotate right at child ${rightChild.val}.`,
         kind: "rotation",
@@ -182,7 +184,7 @@ const rebalanceWithTrace = (node, trail, frames) => {
       next = { ...next, right: rotateRight(rightChild) };
       pushTraceFrame(frames, {
         label: `After prep rotation at ${rightChild.val}`,
-        root: rebuildFromTrail(next, trail),
+        root: rebuildFromTrail(next, trail, trailLen),
         focus: [next.val, next.right?.val].filter(Boolean),
         explanation: "Preparation complete for final left rotation at the root of this subtree.",
         kind: "rotation-result",
@@ -192,7 +194,7 @@ const rebalanceWithTrace = (node, trail, frames) => {
     const pivot = next.right?.val;
     pushTraceFrame(frames, {
       label: `Rotate left at ${next.val}`,
-      root: rebuildFromTrail(next, trail),
+      root: rebuildFromTrail(next, trail, trailLen),
       focus: [next.val, pivot].filter(Boolean),
       explanation: `Main balancing step: rotate left around ${next.val} with pivot ${pivot}.`,
       kind: "rotation",
@@ -201,7 +203,7 @@ const rebalanceWithTrace = (node, trail, frames) => {
     const rotated = rotateLeft(next);
     pushTraceFrame(frames, {
       label: `After left rotation at ${next.val}`,
-      root: rebuildFromTrail(rotated, trail),
+      root: rebuildFromTrail(rotated, trail, trailLen),
       focus: [rotated.val, rotated.left?.val].filter(Boolean),
       explanation: `Subtree rooted at ${next.val} is now balanced after left rotation.`,
       kind: "rotation-result",
@@ -215,13 +217,17 @@ const rebalanceWithTrace = (node, trail, frames) => {
 
 export const avlInsertTrace = (root, value) => {
   const frames = [];
+  // Mutable trail — push/pop instead of spreading a new array each recursion
+  const trail = [];
 
-  const insert = (node, trail) => {
+  const insert = (node) => {
+    const trailLen = trail.length;
+
     if (!node) {
       const created = createNode(value, { h: 1 });
       pushTraceFrame(frames, {
         label: `Inserted ${value}`,
-        root: rebuildFromTrail(created, trail),
+        root: rebuildFromTrail(created, trail, trailLen),
         focus: [value],
         explanation: `Create new AVL node ${value} at the insertion point.`,
         kind: "insert",
@@ -230,21 +236,23 @@ export const avlInsertTrace = (root, value) => {
     }
 
     if (value < node.val) {
-      const left = insert(node.left, [...trail, { node, dir: "left" }]);
-      const rebalanced = rebalanceWithTrace({ ...node, left }, trail, frames);
-      return rebalanced;
+      trail.push({ node, dir: "left" });
+      const left = insert(node.left);
+      trail.length = trailLen; // pop back
+      return rebalanceWithTrace({ ...node, left }, trail, trailLen, frames);
     }
 
     if (value > node.val) {
-      const right = insert(node.right, [...trail, { node, dir: "right" }]);
-      const rebalanced = rebalanceWithTrace({ ...node, right }, trail, frames);
-      return rebalanced;
+      trail.push({ node, dir: "right" });
+      const right = insert(node.right);
+      trail.length = trailLen; // pop back
+      return rebalanceWithTrace({ ...node, right }, trail, trailLen, frames);
     }
 
     return node;
   };
 
-  const nextRoot = insert(root, []);
+  const nextRoot = insert(root);
   pushTraceFrame(frames, {
     label: `Done inserting ${value}`,
     root: nextRoot,
@@ -253,34 +261,39 @@ export const avlInsertTrace = (root, value) => {
     kind: "done",
   });
 
+  // Strip internal dedup metadata before returning
   return {
     root: nextRoot,
-    frames: frames.map(({ signature, ...frame }) => frame),
+    frames: frames.map(({ _focusKey, _id, ...frame }) => frame),
   };
 };
 
 export const avlDeleteTrace = (root, value) => {
   const frames = [];
+  const trail = [];
 
-  const remove = (node, trail, target) => {
+  const remove = (node, target) => {
     if (!node) return null;
+    const trailLen = trail.length;
 
     if (target < node.val) {
-      const left = remove(node.left, [...trail, { node, dir: "left" }], target);
-      const rebalanced = rebalanceWithTrace({ ...node, left }, trail, frames);
-      return rebalanced;
+      trail.push({ node, dir: "left" });
+      const left = remove(node.left, target);
+      trail.length = trailLen;
+      return rebalanceWithTrace({ ...node, left }, trail, trailLen, frames);
     }
 
     if (target > node.val) {
-      const right = remove(node.right, [...trail, { node, dir: "right" }], target);
-      const rebalanced = rebalanceWithTrace({ ...node, right }, trail, frames);
-      return rebalanced;
+      trail.push({ node, dir: "right" });
+      const right = remove(node.right, target);
+      trail.length = trailLen;
+      return rebalanceWithTrace({ ...node, right }, trail, trailLen, frames);
     }
 
     if (!node.left) {
       pushTraceFrame(frames, {
         label: `Removed ${target}`,
-        root: rebuildFromTrail(node.right, trail),
+        root: rebuildFromTrail(node.right, trail, trailLen),
         focus: [target],
         explanation: `Node ${target} removed. It had no left child, so its right subtree moved up.`,
         kind: "delete",
@@ -291,7 +304,7 @@ export const avlDeleteTrace = (root, value) => {
     if (!node.right) {
       pushTraceFrame(frames, {
         label: `Removed ${target}`,
-        root: rebuildFromTrail(node.left, trail),
+        root: rebuildFromTrail(node.left, trail, trailLen),
         focus: [target],
         explanation: `Node ${target} removed. It had no right child, so its left subtree moved up.`,
         kind: "delete",
@@ -300,24 +313,27 @@ export const avlDeleteTrace = (root, value) => {
     }
 
     const successor = minNode(node.right);
+    trail.push({ node, dir: "right" });
+    const replacedRight = remove(node.right, successor.val);
+    trail.length = trailLen;
+
     const replaced = {
       ...node,
       val: successor.val,
-      right: remove(node.right, [...trail, { node, dir: "right" }], successor.val),
+      right: replacedRight,
     };
     pushTraceFrame(frames, {
       label: `Replace ${value} with successor ${successor.val}`,
-      root: rebuildFromTrail(replaced, trail),
+      root: rebuildFromTrail(replaced, trail, trailLen),
       focus: [value, successor.val],
       explanation: `Node ${value} has two children. Use in-order successor ${successor.val} to preserve ordering.`,
       kind: "replace",
     });
 
-    const rebalanced = rebalanceWithTrace(replaced, trail, frames);
-    return rebalanced;
+    return rebalanceWithTrace(replaced, trail, trailLen, frames);
   };
 
-  const nextRoot = remove(root, [], value);
+  const nextRoot = remove(root, value);
   pushTraceFrame(frames, {
     label: `Done deleting ${value}`,
     root: nextRoot,
@@ -328,6 +344,6 @@ export const avlDeleteTrace = (root, value) => {
 
   return {
     root: nextRoot,
-    frames: frames.map(({ signature, ...frame }) => frame),
+    frames: frames.map(({ _focusKey, _id, ...frame }) => frame),
   };
 };
