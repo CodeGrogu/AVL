@@ -2076,7 +2076,6 @@ function TreeWorkspace({
     <section className="workspace">
       <div
         className={workspaceLayoutClassName}
-        style={workspaceStyle}
       >
         {!isMobileViewport && (
           <aside className={`control-sidebar ${leftSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Control panel">
