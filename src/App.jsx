@@ -980,6 +980,7 @@ function TreeWorkspace({
   const [isResizing, setIsResizing] = useState(false);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [hoveredTimelineSegment, setHoveredTimelineSegment] = useState(null);
+  const [hoveredHint, setHoveredHint] = useState(null);
 
   const dragRef = useRef({ active: false, startX: 0, startY: 0, panX: 0, panY: 0 });
   const externalOperationNonceRef = useRef(null);
