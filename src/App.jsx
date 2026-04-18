@@ -2918,6 +2918,8 @@ function TreeWorkspace({
         </aside>
       </div>
 
+      <HintTooltip hoveredHint={hoveredHint} />
+
       {actionModal.open && (
         <div className="modal-backdrop" role="presentation" onClick={closeActionModal}>
           <section
