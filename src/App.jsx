@@ -1329,7 +1329,10 @@ function TreeWorkspace({
       return;
     }
 
-    const usingMouseWheel = isLikelyMouseWheel(event, deltaX, deltaY);
+    // If we are actively trackpad panning, lock the gesture to prevent sudden switching to zoom 
+    // when the user curves their finger perfectly vertically/horizontally.
+    const isMidTrackpadPan = !!wheelPanDebounceRef.current;
+    const usingMouseWheel = !isMidTrackpadPan && isLikelyMouseWheel(event, deltaX, deltaY);
 
     if (usingMouseWheel) {
       const clampedWheelDelta = clamp(deltaY, -MOUSE_WHEEL_ZOOM_DELTA_LIMIT, MOUSE_WHEEL_ZOOM_DELTA_LIMIT);
