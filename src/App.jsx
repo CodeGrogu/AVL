@@ -1292,15 +1292,8 @@ function TreeWorkspace({
 
     const panDirection = invertTrackpadPan ? -1 : 1;
 
-    // Ensure screen pixel deltas are converted into canvas coordinates
-    // by dividing by the current zoom level. This keeps DOM tooltips
-    // and canvas panning in sync across zoom levels (e.g., 2x zoom).
-    const currentZoom = zoomRef.current || 1;
-
-    wheelPanBufferRef.current.x +=
-      (clamp(deltaX, -TRACKPAD_PAN_DELTA_LIMIT, TRACKPAD_PAN_DELTA_LIMIT) * panDirection) / currentZoom;
-    wheelPanBufferRef.current.y +=
-      (clamp(deltaY, -TRACKPAD_PAN_DELTA_LIMIT, TRACKPAD_PAN_DELTA_LIMIT) * panDirection) / currentZoom;
+    wheelPanBufferRef.current.x += clamp(deltaX, -TRACKPAD_PAN_DELTA_LIMIT, TRACKPAD_PAN_DELTA_LIMIT) * panDirection;
+    wheelPanBufferRef.current.y += clamp(deltaY, -TRACKPAD_PAN_DELTA_LIMIT, TRACKPAD_PAN_DELTA_LIMIT) * panDirection;
 
     if (wheelPanRafRef.current !== null) return;
 
