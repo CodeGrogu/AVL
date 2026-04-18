@@ -1847,24 +1847,24 @@ body::-webkit-scrollbar,
   z-index: 3000;
   pointer-events: none;
   user-select: none;
-  transform: translate(-50%, -100%);
   animation: tooltip-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes tooltip-enter {
   from {
     opacity: 0;
-    transform: translate(-50%, -90%) scale(0.92);
+    transform: translateY(-3px) scale(0.98);
     filter: blur(4px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -100%) scale(1);
+    transform: translateY(0) scale(1);
     filter: blur(0);
   }
 }
 
 .node-tooltip-inner {
+  position: relative;
   max-width: 300px;
   min-width: 180px;
   padding: 12px 14px;
