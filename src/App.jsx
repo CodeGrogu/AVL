@@ -1080,6 +1080,7 @@ function TreeWorkspace({
   const [statsLabelMode, setStatsLabelMode] = useState("full");
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isWheelPanning, setIsWheelPanning] = useState(false);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [hoveredTimelineSegment, setHoveredTimelineSegment] = useState(null);
   const [hoveredHint, setHoveredHint] = useState(null);
@@ -1118,6 +1119,7 @@ function TreeWorkspace({
   const zoomRef = useRef(1);
   const wheelPanBufferRef = useRef({ x: 0, y: 0 });
   const wheelPanRafRef = useRef(null);
+  const wheelPanDebounceRef = useRef(null);
   const viewportSyncTimeoutRef = useRef(null);
   const historySignature = useMemo(() => getHistorySignature(history), [history]);
 
@@ -1294,6 +1296,15 @@ function TreeWorkspace({
 
     wheelPanBufferRef.current.x += clamp(deltaX, -TRACKPAD_PAN_DELTA_LIMIT, TRACKPAD_PAN_DELTA_LIMIT) * panDirection;
     wheelPanBufferRef.current.y += clamp(deltaY, -TRACKPAD_PAN_DELTA_LIMIT, TRACKPAD_PAN_DELTA_LIMIT) * panDirection;
+
+    // Immediately disable the CSS transform transition while trackpad-panning;
+    // a short debounce re-enables it once the gesture settles.
+    setIsWheelPanning(true);
+    if (wheelPanDebounceRef.current) clearTimeout(wheelPanDebounceRef.current);
+    wheelPanDebounceRef.current = setTimeout(() => {
+      setIsWheelPanning(false);
+      wheelPanDebounceRef.current = null;
+    }, 180);
 
     if (wheelPanRafRef.current !== null) return;
 
@@ -1532,6 +1543,7 @@ function TreeWorkspace({
       if (traversalTimerRef.current) clearInterval(traversalTimerRef.current);
       if (transitionRafRef.current) cancelAnimationFrame(transitionRafRef.current);
       if (wheelPanRafRef.current) cancelAnimationFrame(wheelPanRafRef.current);
+      if (wheelPanDebounceRef.current) clearTimeout(wheelPanDebounceRef.current);
     },
     [],
   );
@@ -2959,7 +2971,7 @@ function TreeWorkspace({
               }}
             >
               <g
-                className={`canvas-zoom-layer ${isDragging || isResizing ? "dragging" : ""}`}
+                className={`canvas-zoom-layer ${isDragging || isResizing || isWheelPanning ? "dragging" : ""}`}
                 transform={`translate(${renderedPan.x},${renderedPan.y}) scale(${renderedZoom})`}
               >
                 {animatedGraph?.edges.map((edge) => {
