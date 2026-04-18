@@ -3276,6 +3276,8 @@ export default function App() {
             />
           </section>
         )}
+
+        <HintTooltip hoveredHint={hoveredHeaderHint} />
       </main>
 
       {settingsOpen && (
