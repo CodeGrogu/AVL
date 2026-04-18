@@ -16,12 +16,15 @@
   }
 
   #root {
-    height: 100dvh;
+    height: 100vh;
+    height: 100lvh;
   }
 
   .app-shell {
-    height: 100dvh;
-    min-height: 100dvh;
+    height: 100vh;
+    height: 100lvh;
+    min-height: 100vh;
+    min-height: 100lvh;
     background: linear-gradient(180deg, #f8fbfe 0%, #f2f7fb 100%);
   }
 

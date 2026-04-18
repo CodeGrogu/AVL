@@ -1568,6 +1568,15 @@ body::-webkit-scrollbar,
   box-shadow: 0 22px 48px -30px rgba(12, 24, 46, 0.7);
 }
 
+.action-modal-backdrop {
+  --action-modal-shift: 0px;
+}
+
+.action-modal-backdrop .action-modal {
+  transform: translateY(calc(-1 * var(--action-modal-shift)));
+  transition: transform 0.16s ease-out;
+}
+
 .action-modal h2 {
   margin: 0;
   font-size: 1.02rem;
@@ -2085,6 +2094,16 @@ body::-webkit-scrollbar,
   .settings-btn {
     padding: 6px 10px;
     font-size: 0.72rem;
+  }
+
+  .action-modal-backdrop {
+    padding: 14px;
+  }
+
+  .action-modal-backdrop .action-modal {
+    max-height: min(74dvh, 420px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .setting-item {

@@ -971,6 +971,7 @@ function TreeWorkspace({
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [actionModal, setActionModal] = useState({ open: false, type: null, value: "" });
+  const [actionModalShift, setActionModalShift] = useState(0);
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 760px)").matches : false,
   );
@@ -1010,6 +1011,8 @@ function TreeWorkspace({
   const speedMenuRef = useRef(null);
   const replaySidebarRef = useRef(null);
   const actionModalInputRef = useRef(null);
+  const actionModalRef = useRef(null);
+  const actionModalShiftRef = useRef(0);
   const panRef = useRef({ x: 0, y: 0 });
   const zoomRef = useRef(1);
   const wheelPanBufferRef = useRef({ x: 0, y: 0 });
@@ -1960,6 +1963,64 @@ function TreeWorkspace({
       document.removeEventListener("keydown", onEscape);
     };
   }, [actionModal.open, closeActionModal]);
+
+  useEffect(() => {
+    if (!actionModal.open) {
+      actionModalShiftRef.current = 0;
+      setActionModalShift(0);
+      return undefined;
+    }
+
+    if (typeof window === "undefined") return undefined;
+
+    const visualViewport = window.visualViewport;
+    let rafId = null;
+
+    const updateActionModalShift = () => {
+      const modal = actionModalRef.current;
+      if (!modal) return;
+
+      const viewportBottom = visualViewport
+        ? visualViewport.offsetTop + visualViewport.height
+        : window.innerHeight;
+
+      const rect = modal.getBoundingClientRect();
+      const overlap = rect.bottom + 12 - viewportBottom;
+      const nextShift = clamp(actionModalShiftRef.current + overlap, 0, window.innerHeight * 0.65);
+
+      if (Math.abs(nextShift - actionModalShiftRef.current) < 0.5) return;
+
+      actionModalShiftRef.current = nextShift;
+      setActionModalShift(nextShift);
+    };
+
+    const scheduleShiftUpdate = () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        updateActionModalShift();
+      });
+    };
+
+    scheduleShiftUpdate();
+
+    window.addEventListener("resize", scheduleShiftUpdate);
+    visualViewport?.addEventListener("resize", scheduleShiftUpdate);
+    visualViewport?.addEventListener("scroll", scheduleShiftUpdate);
+
+    return () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+
+      window.removeEventListener("resize", scheduleShiftUpdate);
+      visualViewport?.removeEventListener("resize", scheduleShiftUpdate);
+      visualViewport?.removeEventListener("scroll", scheduleShiftUpdate);
+    };
+  }, [actionModal.open]);
 
   const actionModalTitle =
     actionModal.type === "insert"
@@ -2949,8 +3010,14 @@ function TreeWorkspace({
       <HintTooltip hoveredHint={hoveredHint} />
 
       {actionModal.open && (
-        <div className="modal-backdrop" role="presentation" onClick={closeActionModal}>
+        <div
+          className="modal-backdrop action-modal-backdrop"
+          role="presentation"
+          style={{ "--action-modal-shift": `${actionModalShift}px` }}
+          onClick={closeActionModal}
+        >
           <section
+            ref={actionModalRef}
             className="action-modal"
             role="dialog"
             aria-modal="true"
