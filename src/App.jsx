@@ -162,6 +162,7 @@ const PINCH_ZOOM_DELTA_LIMIT = 12;
 const MOUSE_WHEEL_ZOOM_DELTA_LIMIT = 90;
 const PINCH_ZOOM_SENSITIVITY = 0.01;
 const MOUSE_WHEEL_ZOOM_SENSITIVITY = 0.0015;
+const VIEWPORT_SYNC_DEBOUNCE_MS = 120;
 
 const normalizeWheelDeltas = (event) => {
   if (event.deltaMode === WHEEL_DELTA_MODE_LINE) {
@@ -1013,6 +1014,7 @@ function TreeWorkspace({
   const zoomRef = useRef(1);
   const wheelPanBufferRef = useRef({ x: 0, y: 0 });
   const wheelPanRafRef = useRef(null);
+  const viewportSyncTimeoutRef = useRef(null);
   const historySignature = useMemo(() => getHistorySignature(history), [history]);
 
   const [transitionState, setTransitionState] = useState(null);
@@ -1571,17 +1573,14 @@ function TreeWorkspace({
     initializeForType();
   }, [type]);
 
-  useEffect(() => {
-    if (!hasTypeInitializedRef.current) return;
-    if (restoredTypeRef.current !== type) return;
-
+  const buildSessionSnapshot = useCallback((nextZoom, nextPan) => {
     const timelineMax = Math.max(0, timelineState.frames.length - 1);
     const safeIndex = clamp(timelineState.index, 0, timelineMax);
     const safeSelectedOperationId = operationHistory.some((entry) => entry.id === selectedOperationId)
       ? selectedOperationId
       : operationHistory[0]?.id ?? null;
 
-    onSessionChange({
+    return {
       operationHistory: operationHistory.map(cloneOperation),
       selectedOperationId: safeSelectedOperationId,
       timelineState: {
@@ -1590,11 +1589,40 @@ function TreeWorkspace({
         playing: false,
       },
       timelineSpeed,
-      zoom,
-      pan,
+      zoom: nextZoom,
+      pan: nextPan,
       historySignature,
-    });
-  }, [type, operationHistory, selectedOperationId, timelineState, timelineSpeed, zoom, pan, historySignature, onSessionChange]);
+    };
+  }, [operationHistory, selectedOperationId, timelineState, timelineSpeed, historySignature]);
+
+  useEffect(() => {
+    if (!hasTypeInitializedRef.current) return;
+    if (restoredTypeRef.current !== type) return;
+
+    onSessionChange(buildSessionSnapshot(zoomRef.current, panRef.current));
+  }, [type, buildSessionSnapshot, onSessionChange]);
+
+  useEffect(() => {
+    if (!hasTypeInitializedRef.current) return undefined;
+    if (restoredTypeRef.current !== type) return undefined;
+
+    if (viewportSyncTimeoutRef.current) {
+      clearTimeout(viewportSyncTimeoutRef.current);
+    }
+
+    // Avoid syncing viewport state on every touchmove/wheel tick.
+    viewportSyncTimeoutRef.current = setTimeout(() => {
+      viewportSyncTimeoutRef.current = null;
+      onSessionChange(buildSessionSnapshot(zoom, pan));
+    }, VIEWPORT_SYNC_DEBOUNCE_MS);
+
+    return () => {
+      if (viewportSyncTimeoutRef.current) {
+        clearTimeout(viewportSyncTimeoutRef.current);
+        viewportSyncTimeoutRef.current = null;
+      }
+    };
+  }, [type, zoom, pan, buildSessionSnapshot, onSessionChange]);
 
   const animatedGraph = useMemo(() => {
     if (!currentLayout) return null;
