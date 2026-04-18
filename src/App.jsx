@@ -785,6 +785,34 @@ function TimelineSegmentTooltip({ hoveredSegment }) {
   );
 }
 
+function HintTooltip({ hoveredHint }) {
+  const hasHint = Boolean(hoveredHint?.text);
+
+  const anchor = useMemo(() => {
+    if (!hoveredHint) return null;
+    return { x: hoveredHint.x, y: hoveredHint.y };
+  }, [hoveredHint]);
+  const { tooltipRef, layout } = useTooltipPlacement({
+    anchor,
+    visible: hasHint,
+    preferredPlacement: "top",
+    offset: TOOLTIP_DEFAULT_OFFSET,
+  });
+
+  if (!hasHint || !anchor) return null;
+
+  return (
+    <div
+      ref={tooltipRef}
+      className={`hint-tooltip placement-${layout.placement} ${layout.ready ? "is-ready" : "is-measuring"}`}
+      style={{ left: `${layout.left}px`, top: `${layout.top}px`, visibility: layout.ready ? "visible" : "hidden" }}
+      role="tooltip"
+    >
+      <div className="hint-tooltip-inner">{hoveredHint.text}</div>
+    </div>
+  );
+}
+
 function LearnPanel() {
   const cards = [
     {
