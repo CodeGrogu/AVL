@@ -1773,8 +1773,25 @@ body::-webkit-scrollbar,
   z-index: 3000;
   pointer-events: none;
   user-select: none;
-  transform: translate(-50%, -100%);
   animation: tooltip-enter 0.18s ease-out;
+}
+
+.timeline-segment-tooltip.is-measuring,
+.node-tooltip.is-measuring,
+.hint-tooltip.is-measuring {
+  opacity: 0;
+}
+
+.timeline-segment-tooltip.placement-top,
+.node-tooltip.placement-top,
+.hint-tooltip.placement-top {
+  transform-origin: bottom center;
+}
+
+.timeline-segment-tooltip.placement-bottom,
+.node-tooltip.placement-bottom,
+.hint-tooltip.placement-bottom {
+  transform-origin: top center;
 }
 
 .timeline-segment-tooltip-inner {
