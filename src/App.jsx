@@ -1655,6 +1655,26 @@ function TreeWorkspace({
     setHoveredTimelineSegment(null);
   }, []);
 
+  const showHintTooltip = useCallback((text, clientX, clientY) => {
+    if (!text) return;
+    setHoveredHint({ text, x: clientX, y: clientY });
+  }, []);
+
+  const hideHintTooltip = useCallback(() => {
+    setHoveredHint(null);
+  }, []);
+
+  const getHintTriggerProps = useCallback((text) => ({
+    onMouseEnter: (event) => showHintTooltip(text, event.clientX, event.clientY),
+    onMouseMove: (event) => showHintTooltip(text, event.clientX, event.clientY),
+    onMouseLeave: hideHintTooltip,
+    onFocus: (event) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      showHintTooltip(text, rect.left + rect.width / 2, rect.top);
+    },
+    onBlur: hideHintTooltip,
+  }), [hideHintTooltip, showHintTooltip]);
+
   useEffect(() => {
     if (!timelineState.frames.length) {
       setHoveredTimelineSegment(null);
