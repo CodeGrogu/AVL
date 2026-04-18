@@ -42,8 +42,109 @@ const TRAVERSALS = [
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const APP_TITLE_FULL = "Modular Binary Tree Lab";
 const APP_TITLE_COMPACT = "MBTL";
+const TOOLTIP_VIEWPORT_PADDING = 12;
+const TOOLTIP_DEFAULT_OFFSET = 12;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const resolveVerticalPlacement = ({ preferredPlacement, anchorY, tooltipHeight, offset, viewportHeight }) => {
+  const topFits = anchorY - offset - tooltipHeight >= TOOLTIP_VIEWPORT_PADDING;
+  const bottomFits = anchorY + offset + tooltipHeight <= viewportHeight - TOOLTIP_VIEWPORT_PADDING;
+
+  if (preferredPlacement === "bottom") {
+    if (bottomFits) return "bottom";
+    if (topFits) return "top";
+  } else {
+    if (topFits) return "top";
+    if (bottomFits) return "bottom";
+  }
+
+  const topSpace = anchorY - TOOLTIP_VIEWPORT_PADDING;
+  const bottomSpace = viewportHeight - anchorY - TOOLTIP_VIEWPORT_PADDING;
+  return bottomSpace > topSpace ? "bottom" : "top";
+};
+
+const computeTooltipLayout = ({ anchorX, anchorY, tooltipWidth, tooltipHeight, preferredPlacement, offset }) => {
+  const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+  const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 0;
+
+  const placement = resolveVerticalPlacement({
+    preferredPlacement,
+    anchorY,
+    tooltipHeight,
+    offset,
+    viewportHeight,
+  });
+
+  const minLeft = TOOLTIP_VIEWPORT_PADDING;
+  const maxLeft = Math.max(minLeft, viewportWidth - tooltipWidth - TOOLTIP_VIEWPORT_PADDING);
+  const left = clamp(anchorX - tooltipWidth / 2, minLeft, maxLeft);
+
+  const rawTop = placement === "top"
+    ? anchorY - offset - tooltipHeight
+    : anchorY + offset;
+
+  const minTop = TOOLTIP_VIEWPORT_PADDING;
+  const maxTop = Math.max(minTop, viewportHeight - tooltipHeight - TOOLTIP_VIEWPORT_PADDING);
+  const top = clamp(rawTop, minTop, maxTop);
+
+  return { left, top, placement };
+};
+
+function useTooltipPlacement({ anchor, visible, preferredPlacement = "top", offset = TOOLTIP_DEFAULT_OFFSET }) {
+  const tooltipRef = useRef(null);
+  const [viewportTick, setViewportTick] = useState(0);
+  const [layout, setLayout] = useState({ left: 0, top: 0, placement: preferredPlacement, ready: false });
+
+  useLayoutEffect(() => {
+    if (!visible || !anchor || !tooltipRef.current) {
+      setLayout((prev) => ({ ...prev, placement: preferredPlacement, ready: false }));
+      return;
+    }
+
+    const rect = tooltipRef.current.getBoundingClientRect();
+    const next = computeTooltipLayout({
+      anchorX: anchor.x,
+      anchorY: anchor.y,
+      tooltipWidth: rect.width,
+      tooltipHeight: rect.height,
+      preferredPlacement,
+      offset,
+    });
+
+    setLayout({ ...next, ready: true });
+  }, [visible, anchor, preferredPlacement, offset, viewportTick]);
+
+  useEffect(() => {
+    if (!visible || typeof window === "undefined") return undefined;
+
+    const handleViewportChange = () => {
+      setViewportTick((current) => current + 1);
+    };
+
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || !anchor || typeof window === "undefined") return undefined;
+
+    const rafId = window.requestAnimationFrame(() => {
+      setViewportTick((current) => current + 1);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [visible, anchor, offset]);
+
+  return { tooltipRef, layout };
+}
 const getTouchDistance = (first, second) =>
   Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
 const getTouchCenter = (first, second) => ({
