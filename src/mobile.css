@@ -665,4 +665,35 @@
     max-height: min(88dvh, 640px);
     overflow-y: auto;
   }
+  /* Ensure settings modal appears above mobile menus and is centered */
+  .modal-backdrop {
+    z-index: 10000 !important;
+    display: grid !important;
+    place-items: center !important;
+    padding: 14px !important;
+  }
+
+  /* Center and size settings modal on small screens */
+  .settings-modal {
+    margin: 0 auto !important;
+    width: min(96vw, 460px) !important;
+    max-height: min(88dvh, 640px) !important;
+    overflow-y: auto !important;
+  }
+
+  /* Fallback: ensure vertical centering across environments by fixing the modal */
+  .modal-backdrop .settings-modal {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    z-index: 10001 !important;
+    max-height: min(88dvh, 640px) !important;
+    width: min(96vw, 460px) !important;
+    overflow-y: auto !important;
+    margin: 0 !important;
+    padding: 18px !important;
+    box-shadow: rgba(18, 35, 63, 0.5) 0px 24px 46px -26px !important;
+    border-radius: 16px !important;
+  }
 }
