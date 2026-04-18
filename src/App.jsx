@@ -812,8 +812,6 @@ function TreeWorkspace({
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
-  const [mobileRightPanel, setMobileRightPanel] = useState("timeline");
-  const [mobileOverlayHeight, setMobileOverlayHeight] = useState(0);
   const [actionModal, setActionModal] = useState({ open: false, type: null, value: "" });
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 760px)").matches : false,
@@ -851,10 +849,7 @@ function TreeWorkspace({
   const hasTypeInitializedRef = useRef(false);
   const restoredTypeRef = useRef(null);
   const speedMenuRef = useRef(null);
-  const replaySidebarRef = useRef(null);
   const actionModalInputRef = useRef(null);
-  const wheelPanBufferRef = useRef({ x: 0, y: 0 });
-  const wheelPanRafRef = useRef(null);
   const historySignature = useMemo(() => getHistorySignature(history), [history]);
 
   const [transitionState, setTransitionState] = useState(null);
@@ -866,6 +861,14 @@ function TreeWorkspace({
 
   const renderedZoom = useMemo(() => snapZoomValue(zoom), [zoom, snapZoomValue]);
   const renderedPan = pan;
+
+  useEffect(() => {
+    panRef.current = pan;
+  }, [pan]);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
 
   const timelineFrame = timelineState.frames[timelineState.index] ?? null;
   const visualRoot = timelineFrame?.root ?? root;
@@ -1028,9 +1031,9 @@ function TreeWorkspace({
         mode: "pinch",
         touchId: null,
         pinchDistance: getTouchDistance(first, second),
-        pinchZoom: zoom,
-        pinchPanX: pan.x,
-        pinchPanY: pan.y,
+        pinchZoom: zoomRef.current,
+        pinchPanX: panRef.current.x,
+        pinchPanY: panRef.current.y,
         pinchCenterX: center.x - rect.left,
         pinchCenterY: center.y - rect.top,
       };
@@ -1048,12 +1051,12 @@ function TreeWorkspace({
         touchId: touch.identifier,
         startX: touch.clientX,
         startY: touch.clientY,
-        panX: pan.x,
-        panY: pan.y,
+        panX: panRef.current.x,
+        panY: panRef.current.y,
       };
       setIsDragging(true);
     }
-  }, [pan.x, pan.y, zoom]);
+  }, []);
 
   const handleCanvasTouchMove = useCallback((event) => {
     const canvas = canvasRef.current;
@@ -1072,10 +1075,13 @@ function TreeWorkspace({
       const worldY = (touchRef.current.pinchCenterY - touchRef.current.pinchPanY) / baseZoom;
 
       setZoom(nextZoom);
-      setPan({
+      zoomRef.current = nextZoom;
+      const nextPan = {
         x: touchRef.current.pinchCenterX - worldX * nextZoom,
         y: touchRef.current.pinchCenterY - worldY * nextZoom,
-      });
+      };
+      panRef.current = nextPan;
+      setPan(nextPan);
 
       event.preventDefault();
       return;
@@ -1087,10 +1093,12 @@ function TreeWorkspace({
       ?? event.touches[0];
     if (!touch) return;
 
-    setPan({
+    const nextPan = {
       x: touchRef.current.panX + touch.clientX - touchRef.current.startX,
       y: touchRef.current.panY + touch.clientY - touchRef.current.startY,
-    });
+    };
+    panRef.current = nextPan;
+    setPan(nextPan);
 
     event.preventDefault();
   }, [snapZoomValue]);
@@ -1116,9 +1124,9 @@ function TreeWorkspace({
         mode: "pinch",
         touchId: null,
         pinchDistance: getTouchDistance(first, second),
-        pinchZoom: zoom,
-        pinchPanX: pan.x,
-        pinchPanY: pan.y,
+        pinchZoom: zoomRef.current,
+        pinchPanX: panRef.current.x,
+        pinchPanY: panRef.current.y,
         pinchCenterX: center.x - rect.left,
         pinchCenterY: center.y - rect.top,
       };
@@ -1132,10 +1140,10 @@ function TreeWorkspace({
       touchId: touch.identifier,
       startX: touch.clientX,
       startY: touch.clientY,
-      panX: pan.x,
-      panY: pan.y,
+      panX: panRef.current.x,
+      panY: panRef.current.y,
     };
-  }, [pan.x, pan.y, zoom]);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1717,7 +1725,15 @@ function TreeWorkspace({
     }
 
     closeActionModal();
-  }, [actionModal.type, actionModal.value, closeActionModal]);
+  }, [
+    actionModal.type,
+    actionModal.value,
+    closeActionModal,
+    onInsert,
+    onDelete,
+    onSearch,
+    parseActionModalValue,
+  ]);
 
   useEffect(() => {
     if (!actionModal.open) return undefined;
@@ -2092,9 +2108,6 @@ function TreeWorkspace({
       setIsMobileViewport(matches);
       setLeftSidebarOpen((prev) => (matches ? false : prev));
       setRightSidebarOpen((prev) => (matches ? false : prev));
-      if (matches) {
-        setMobileRightPanel("timeline");
-      }
     };
 
     applyMobileState(media.matches);
@@ -2147,8 +2160,7 @@ function TreeWorkspace({
   };
 
   const extraMetric = config.extraMetric(root);
-  const showTimelineSection = !isMobileViewport || mobileRightPanel === "timeline";
-  const showHistorySection = !isMobileViewport || mobileRightPanel === "history";
+  const showHistorySection = !isMobileViewport;
   const workspaceLayoutClassName = isMobileViewport
     ? "workspace-layout mobile-mode"
     : `workspace-layout ${leftSidebarOpen ? "" : "left-sidebar-collapsed"} ${
@@ -2663,16 +2675,11 @@ function TreeWorkspace({
           {!isMobileViewport && renderPlaybackDock()}
         </section>
 
-        <aside
-          ref={replaySidebarRef}
-          className={`replay-sidebar ${rightSidebarOpen ? "" : "collapsed"}`.trim()}
-          aria-label="Timeline and operation history"
-        >
+        <aside className={`replay-sidebar ${rightSidebarOpen ? "" : "collapsed"}`.trim()} aria-label="Timeline and operation history">
           <span className={`status-pill ${message.ok ? "good" : "bad"}`}>{message.text}</span>
 
           <section
             className="sidebar-section timeline-details"
-            hidden={!showTimelineSection}
             style={isMobileViewport ? { display: "none" } : undefined}
           >
             <div className="section-heading-row">
@@ -2693,7 +2700,7 @@ function TreeWorkspace({
             <p className="frame-explanation">{frameExplanation}</p>
           </section>
 
-          {isMobileViewport && showTimelineSection && renderPlaybackDock("playback-dock-inline")}
+          {isMobileViewport && renderPlaybackDock("playback-dock-inline")}
 
           <section
             className="sidebar-section history-sidebar"
