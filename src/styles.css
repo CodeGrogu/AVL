@@ -101,7 +101,7 @@ body::-webkit-scrollbar,
 }
 
 .app-header {
-  padding: 18px 22px;
+  padding: 10px 22px;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(120deg, #ffffff, #f8fcff);
 }
