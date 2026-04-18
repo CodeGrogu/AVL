@@ -3,7 +3,7 @@ import {
   Plus, Trash2, Search, Eraser, ArrowDownToLine, ArrowUpToLine, Dices, Trash,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
   ChevronDown, ZoomIn, ZoomOut, Maximize, Menu, X,
-  SkipBack, Play, Pause, SkipForward, RotateCcw, SlidersHorizontal
+  SkipBack, Play, Pause, SkipForward, RotateCcw, SlidersHorizontal, Sprout, User
 } from "lucide-react";
 import {
   buildTree,
@@ -959,107 +959,149 @@ function HintTooltip({ hoveredHint }) {
 }
 
 // Static learn panel content — hoisted to module scope to avoid re-creating on every render
-const LEARN_CARDS = [
+const JOURNAL_ENTRIES = [
   {
     id: "bst",
-    title: "Shared BST Base",
-    intro:
-      "Every tree mode in this lab starts from the same binary-search-tree contract: each node has one value, a left child for smaller values, and a right child for larger values.",
-    how: [
-      "Insert walks the search path until an empty slot is found.",
-      "Delete handles leaf removal, single-child bypass, or in-order successor replacement.",
-    ],
-    why: [
-      "Keeps behavior consistent across BST, AVL, and Red-Black modes.",
-      "Algorithm differences are easier to compare when balancing logic is layered.",
-    ],
+    date: "Entry #1 - Foundation",
+    title: "Building the Shared BST Base",
+    paragraphs: [
+      "I started by building the fundamental binary search tree contract. Every node in this lab starts with the exact same premise: it holds a single value, a left child for smaller values, and a right child for larger values.",
+      "Insertions simply walk the search path recursively or iteratively until an empty slot is found, creating a new leaf node.",
+      "Deletions were a bit trickier, having to handle three distinct cases: leaf removal, single-child bypass (splicing), or in-order successor replacement for nodes with two children.",
+      "While testing lookups, I noted they operate in O(h) time, where h is the height of the tree. Without any self-balancing mechanism in place, I saw the worst-case height degrade all the way to O(n) during sequential insertions. This keeps foundational behavior strictly consistent across all modes, making algorithm differences crystal clear when the complex balancing logic is cleanly layered on top."
+    ]
   },
   {
     id: "avl",
-    title: "AVL Layer",
-    intro:
-      "AVL augments each node with height metadata and restores strict balance after updates so lookups stay predictably fast.",
-    how: [
-      "Subtree heights are recalculated bottom-up after each update.",
-      "Balance factor (left minus right height) is strictly maintained.",
-      "Imbalances are fixed using single or double rotations (LL, RR, LR, RL).",
-    ],
-    why: [
-      "Maintains tighter balance than Red-Black, improving lookup consistency.",
-      "The timeline highlights precisely where and why each rotation happens.",
-    ],
+    date: "Entry #2 - The Strict Balance",
+    title: "The AVL Layer",
+    paragraphs: [
+      "To fix the O(n) degradation, I augmented each node with height metadata, creating the AVL layer.",
+      "Subtree heights are recalculated bottom-up after every single structural update. By maintaining a strict Balance Factor (left subtree height minus right subtree height) between -1 and 1, the tree restores strict balance so lookups stay predictably fast at O(log n).",
+      "Whenever an imbalance occurs, it's fixed instantly using single or double rotations (Left-Left, Right-Right, Left-Right, Right-Left). It maintains a much tighter structural balance than Red-Black trees, making it the superior choice for read-heavy workloads where lookup speed is paramount."
+    ]
   },
   {
     id: "rb",
-    title: "Red-Black Layer",
-    intro:
-      "Red-Black trees use node color rules instead of explicit height factors to keep tree height logarithmic with fewer rotations on average.",
-    how: [
-      "Insertions begin with a red node; fix-up rules resolve violations through recolors and rotations.",
-      "Enforces invariants: black root, no adjacent red nodes, equal black height paths.",
-    ],
-    why: [
-      "Often performs fewer rebalances during mixed insert/delete workloads.",
-      "Case-by-case trace frames make color flips easy to follow.",
-    ],
+    date: "Entry #3 - The Flexible Alternative",
+    title: "The Red-Black Layer",
+    paragraphs: [
+      "I implemented Red-Black trees as a more flexible alternative to AVL. Instead of explicit height factors, they use node color rules (Red or Black) to keep tree height logarithmic with fewer rotations on average.",
+      "Insertions always begin with a Red node. From there, fix-up rules resolve violations through strategic recolorings and occasional rotations.",
+      "It enforces core invariants: The root is always Black, Red nodes cannot have Red children, and all paths to leaves must contain the exact same number of Black nodes. Because it often performs fewer structural rebalances during mixed workloads, it's ideal for standard library implementations (like C++ std::map)."
+    ]
   },
   {
     id: "timeline",
-    title: "Animation & Replay",
-    intro:
-      "Each structural operation is captured as an ordered frame sequence so you can inspect state transitions instead of only final results.",
-    how: [
-      "The scrubber maps one-to-one to recorded frames.",
-      "Play/Pause, Prev/Next, and Replay let you inspect quickly or frame-by-frame.",
-      "Operation history stores prior traces to replay specific inserts/deletes later.",
-    ],
-    why: [
-      "Replay-first interaction turns balancing into a debuggable process.",
-      "You can visually compare identical value sequences across the different tree variants.",
-    ],
-  },
+    date: "Entry #4 - Time Travel",
+    title: "Animation & Replay System",
+    paragraphs: [
+      "To truly understand these algorithms, seeing the final result wasn't enough. I built a system where each structural operation is captured as an ordered frame sequence.",
+      "The scrubber maps one-to-one to recorded trace frames, effectively acting as a time machine for the data structure. Using Play/Pause, Prev/Next, and Replay, you can inspect state transitions quickly or step frame-by-frame.",
+      "This replay-first interaction turns abstract balancing algorithms into a tangible, debuggable process. It's fascinating to visually compare identical value sequences across different tree variants to see exactly how their balancing strategies differ."
+    ]
+  }
 ];
+
+function HomePanel({ onStart, onInfo }) {
+  return (
+    <div className="home-container">
+      {/* Retro grid lines background */}
+      <div className="retro-grid" />
+
+      {/* Decorative corner ornaments */}
+      <div className="retro-ornament retro-ornament-tl" />
+      <div className="retro-ornament retro-ornament-br" />
+
+      <div className="home-hero">
+        <div className="retro-stamp">
+          Est. 2026
+        </div>
+
+        <h1 className="hero-title">
+          The Binary<br />
+          <span>Tree Lab</span>
+        </h1>
+
+        <div className="retro-divider">
+          <span className="retro-divider-diamond" />
+          <span className="retro-divider-line" />
+          <span className="retro-divider-diamond" />
+        </div>
+
+        <p className="hero-subtitle">
+          A handcrafted, interactive workbench for exploring the inner mechanics of BST, AVL, and Red-Black trees. Watch algorithms come alive with frame-by-frame replay, real-time tracing, and intuitive visual feedback.
+        </p>
+
+        <div className="retro-features">
+          <div className="retro-feature">
+            <span className="retro-feature-number">01</span>
+            <span className="retro-feature-label">Three Tree Variants</span>
+          </div>
+          <div className="retro-feature">
+            <span className="retro-feature-number">02</span>
+            <span className="retro-feature-label">Frame-by-Frame Replay</span>
+          </div>
+          <div className="retro-feature">
+            <span className="retro-feature-number">03</span>
+            <span className="retro-feature-label">Live Algorithm Tracing</span>
+          </div>
+        </div>
+
+        <div className="hero-actions">
+          <button className="btn-primary-large" onClick={onStart}>
+            <Play size={20} />
+            Open the Lab
+          </button>
+          <button className="btn-secondary-large" onClick={onInfo}>
+            Read the Notes
+          </button>
+        </div>
+
+        <div className="retro-footer-line">
+          Designed & built by Jaden Awaseb
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function LearnPanel() {
   return (
-    <div className="learn-container">
-      <header className="learn-header">
-        <h2>Core Concepts</h2>
-        <p>Understand the foundational mechanics and architectural differences behind tree variants.</p>
+    <div className="journal-container">
+      <header className="journal-header">
+        <div className="journal-date">Research Log • 2026</div>
+        <h2 className="journal-title">Tree Architecture Notes</h2>
       </header>
-      <section className="learn-grid">
-        {LEARN_CARDS.map((card, index) => (
-          <article key={card.title} className={`learn-card theme-${card.id}`}>
-            <div className="card-glass-layer" />
-            <div className="card-content">
-              <div className="card-header">
-                <span className="card-number">0{index + 1}</span>
-                <h3>{card.title}</h3>
-              </div>
-              <p className="learn-card-intro">{card.intro}</p>
 
-              <div className="card-body">
-                <div className="card-section">
-                  <h4>How it works</h4>
-                  <ul>
-                    {card.how.map((point) => (
-                      <li key={point}>{point}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="card-section">
-                  <h4>Why it matters</h4>
-                  <ul>
-                    {card.why.map((point) => (
-                      <li key={point}>{point}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </article>
-        ))}
+      {/* Answer Engine Optimization (AEO) & E-E-A-T Block */}
+      <section className="aeo-answer-box journal-aeo">
+        <User className="journal-aeo-bg-icon" />
+        <h3>What is an AVL Tree?</h3>
+        <p>
+          <strong>Answer:</strong> An AVL tree is a self-balancing binary search tree where the height difference between left and right subtrees is at most one. I built this visualizer to test tree algorithms; it provides step-by-step animations of LL, RR, LR, and RL rotations so you can understand exactly how self-balancing works in real-time.
+        </p>
+        <div className="journal-author">
+          <span><strong>Expertise:</strong> Tested & Built by <a href="https://github.com/codegrogu" target="_blank" rel="noopener noreferrer">Jaden Awaseb</a></span>
+        </div>
       </section>
+
+      <article className="journal-entries">
+        {JOURNAL_ENTRIES.map((entry) => (
+          <section key={entry.id} className="journal-entry">
+            <div className="entry-meta">
+              <span className="entry-date">{entry.date}</span>
+              <span className={`entry-tag tag-${entry.id}`}></span>
+            </div>
+            <h2 className="entry-title">{entry.title}</h2>
+            <div className="entry-content">
+              {entry.paragraphs.map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
+            </div>
+          </section>
+        ))}
+      </article>
     </div>
   );
 }
