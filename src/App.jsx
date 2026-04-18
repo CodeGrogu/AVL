@@ -299,7 +299,7 @@ const sanitizePersistedSession = (candidate) => {
 const createDefaultStorage = () => ({
   version: STORAGE_VERSION,
   app: {
-    activeTab: "learn",
+    activeTab: "home",
     treeType: "BST",
     history: [...INITIAL_VALUES],
     settings: { ...DEFAULT_SETTINGS },
@@ -340,7 +340,9 @@ const readPersistedState = () => {
     if (parsed.version !== STORAGE_VERSION) return createDefaultStorage();
 
     const treeType = TREE_CONFIG[parsed.app?.treeType] ? parsed.app.treeType : "BST";
-    const activeTab = parsed.app?.activeTab === "learn" ? "learn" : TYPE_TO_TAB[treeType];
+    const NON_TREE_TABS = new Set(["home", "info", "learn"]);
+    const savedTab = parsed.app?.activeTab;
+    const activeTab = NON_TREE_TABS.has(savedTab) ? savedTab : TYPE_TO_TAB[treeType];
     const history = sanitizeHistory(parsed.app?.history);
     const settings = sanitizeSettings(parsed.app?.settings);
 
@@ -3372,7 +3374,10 @@ export default function App() {
     }, {}),
   );
 
-  const [activeTab, setActiveTab] = useState(persistedRef.current.app.activeTab);
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = persistedRef.current.app.activeTab;
+    return saved === "learn" ? "info" : saved;
+  });
   const [treeType, setTreeType] = useState(persistedRef.current.app.treeType);
   const [history, setHistory] = useState(persistedRef.current.app.history);
   const [settings, setSettings] = useState(() => sanitizeSettings(persistedRef.current.app.settings));
@@ -3579,7 +3584,7 @@ export default function App() {
   const switchTab = (tabKey) => {
     setActiveTab(tabKey);
     setMobileMenuOpen(false);
-    if (tabKey !== "learn" && TAB_TO_TYPE[tabKey] !== treeType) convertTo(TAB_TO_TYPE[tabKey]);
+    if (tabKey !== "home" && tabKey !== "info" && TAB_TO_TYPE[tabKey] !== treeType) convertTo(TAB_TO_TYPE[tabKey]);
   };
 
   const showHeaderHint = useCallback((text, clientX, clientY) => {
@@ -3603,8 +3608,9 @@ export default function App() {
   }), [hideHeaderHint, showHeaderHint]);
 
   const tabs = [
-    { key: "learn", label: "Concepts" },
+    { key: "home", label: "Home" },
     ...TREE_TYPE_ORDER.map((key) => ({ key: TREE_CONFIG[key].tab, label: TREE_CONFIG[key].shortLabel })),
+    { key: "info", label: "Info" },
   ];
 
   useEffect(() => {
@@ -3630,7 +3636,7 @@ export default function App() {
           <div className={`app-header-row ${activeTab === "learn" ? "learn-mode" : ""}`.trim()}>
             <h1>{APP_TITLE_COMPACT}</h1>
 
-            {activeTab !== "learn" && (
+            {activeTab !== "home" && activeTab !== "info" && (
               <div className="header-history-marquee" role="navigation" aria-label="Recent operation history">
                 <span className="header-history-label">Recent</span>
                 <div className="header-history-track">
@@ -3677,7 +3683,7 @@ export default function App() {
                 />
               </div>
               <div className="header-actions">
-                {activeHeaderStatus && (
+                {activeHeaderStatus && activeTab !== "home" && activeTab !== "info" && (
                   <span
                     className={`status-pill header-status-pill ${activeHeaderStatus.ok ? "good" : "bad"}`}
                     role="status"
@@ -3700,8 +3706,12 @@ export default function App() {
           </div>
         </header>
 
-        {activeTab === "learn" ? (
-          <section id="panel-learn" role="tabpanel" aria-labelledby="switch-learn" className="learn-panel-shell">
+        {activeTab === "home" ? (
+          <section id="panel-home" role="tabpanel" aria-labelledby="switch-home" className="home-panel-shell">
+            <HomePanel onStart={() => switchTab('bst')} onInfo={() => switchTab('info')} />
+          </section>
+        ) : activeTab === "info" ? (
+          <section id="panel-info" role="tabpanel" aria-labelledby="switch-info" className="learn-panel-shell">
             <LearnPanel />
           </section>
         ) : (
