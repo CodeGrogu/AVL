@@ -2117,7 +2117,6 @@ function TreeWorkspace({
                 }}
                 onBlur={hideTimelineSegmentTooltip}
                 aria-label={`Go to frame ${index + 1}: ${frame.label}`}
-                title={`Frame ${index + 1}: ${frame.label}`}
               />
             ))
           ) : (
@@ -2228,7 +2227,6 @@ function TreeWorkspace({
                 }}
                 onBlur={hideTimelineSegmentTooltip}
                 aria-label={`Go to frame ${index + 1}: ${frame.label}`}
-                title={`Frame ${index + 1}: ${frame.label}`}
               />
             ))
           ) : (
