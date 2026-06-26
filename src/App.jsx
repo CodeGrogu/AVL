@@ -3417,7 +3417,10 @@ const TYPE_LEGENDS = {
 };
 
 export default function App() {
-  const persistedRef = useRef(readPersistedState());
+  const persistedRef = useRef(null);
+  if (persistedRef.current === null) {
+    persistedRef.current = readPersistedState();
+  }
 
   const [headerStatusByType, setHeaderStatusByType] = useState(INITIAL_HEADER_STATUS);
 
