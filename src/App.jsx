@@ -2685,19 +2685,7 @@ function TreeWorkspace({
     };
   }, []);
 
-  const typeLegend =
-    type === "AVL"
-      ? [
-          { fill: "#34D399", stroke: "#065F46", label: "Balanced (bf=0)" },
-          { fill: "#FCD34D", stroke: "#92400E", label: "Leaning (|bf|=1)" },
-          { fill: "#FCA5A5", stroke: "#B91C1C", label: "Violation (|bf|>=2)" },
-        ]
-      : type === "RB"
-        ? [
-            { fill: "#D9480F", stroke: "#7C2D12", label: "Red node" },
-            { fill: "#1F2937", stroke: "#111827", label: "Black node" },
-          ]
-        : [{ fill: "#7CC4FA", stroke: "#1D4ED8", label: "BST node" }];
+  const typeLegend = TYPE_LEGENDS[type] || TYPE_LEGENDS.BST;
 
   const getNodePalette = (nodeMeta) => {
     const value = nodeMeta.value;
@@ -3387,15 +3375,38 @@ function TreeWorkspace({
   );
 }
 
+
+const INITIAL_HEADER_STATUS = TREE_TYPE_ORDER.reduce((acc, type) => {
+  acc[type] = { ok: true, text: `${TREE_CONFIG[type].shortLabel} ready.` };
+  return acc;
+}, {});
+
+const APP_TABS = [
+  { key: "home", label: "Home" },
+  ...TREE_TYPE_ORDER.map((key) => ({ key: TREE_CONFIG[key].tab, label: TREE_CONFIG[key].shortLabel })),
+  { key: "info", label: "Info" },
+];
+
+
+const TYPE_LEGENDS = {
+  AVL: [
+    { fill: "#34D399", stroke: "#065F46", label: "Balanced (bf=0)" },
+    { fill: "#FCD34D", stroke: "#92400E", label: "Leaning (|bf|=1)" },
+    { fill: "#FCA5A5", stroke: "#B91C1C", label: "Violation (|bf|>=2)" },
+  ],
+  RB: [
+    { fill: "#D9480F", stroke: "#7C2D12", label: "Red node" },
+    { fill: "#1F2937", stroke: "#111827", label: "Black node" },
+  ],
+  BST: [
+    { fill: "#7CC4FA", stroke: "#1D4ED8", label: "BST node" }
+  ]
+};
+
 export default function App() {
   const persistedRef = useRef(readPersistedState());
 
-  const [headerStatusByType, setHeaderStatusByType] = useState(() =>
-    TREE_TYPE_ORDER.reduce((acc, type) => {
-      acc[type] = { ok: true, text: `${TREE_CONFIG[type].shortLabel} ready.` };
-      return acc;
-    }, {}),
-  );
+  const [headerStatusByType, setHeaderStatusByType] = useState(INITIAL_HEADER_STATUS);
 
   const [activeTab, setActiveTab] = useState(() => {
     const saved = persistedRef.current.app.activeTab;
@@ -3630,11 +3641,7 @@ export default function App() {
     onBlur: hideHeaderHint,
   }), [hideHeaderHint, showHeaderHint]);
 
-  const tabs = [
-    { key: "home", label: "Home" },
-    ...TREE_TYPE_ORDER.map((key) => ({ key: TREE_CONFIG[key].tab, label: TREE_CONFIG[key].shortLabel })),
-    { key: "info", label: "Info" },
-  ];
+
 
   useEffect(() => {
     if (!settingsOpen && !mobileMenuOpen) return undefined;
@@ -3698,7 +3705,7 @@ export default function App() {
             <div id="app-header-menu" className={`app-header-menu ${mobileMenuOpen ? "open" : ""}`.trim()}>
               <div className="app-header-switcher-wrap">
                 <ConceptSwitcher
-                  tabs={tabs}
+                  tabs={APP_TABS}
                   activeTab={activeTab}
                   onSwitchTab={switchTab}
                   className="app-header-switcher"
