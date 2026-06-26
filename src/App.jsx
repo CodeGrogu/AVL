@@ -3371,7 +3371,12 @@ function TreeWorkspace({
               inputMode="numeric"
               enterKeyHint="done"
               placeholder="integer"
-              onChange={(event) => setActionModal((prev) => ({ ...prev, value: event.target.value }))}
+              maxLength={15}
+              onChange={(event) => {
+                // Security Enhancement: Limit input length to prevent client-side DoS
+                const safeValue = event.target.value.slice(0, 15);
+                setActionModal((prev) => ({ ...prev, value: safeValue }));
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") submitActionModal();
               }}
