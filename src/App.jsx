@@ -2347,6 +2347,15 @@ function TreeWorkspace({
   };
 
   const onClearAll = () => {
+    if (!root) {
+      setError("Tree is already empty.");
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to clear the entire tree?")) {
+      return;
+    }
+
     clearSearch();
     stopTraversal();
 
@@ -2849,6 +2858,7 @@ function TreeWorkspace({
                 aria-label={leftSidebarOpen ? "Hide left sidebar" : "Show left sidebar"}
                 aria-expanded={leftSidebarOpen}
                 onClick={toggleLeftSidebar}
+                {...getHintTriggerProps(leftSidebarOpen ? "Hide left sidebar" : "Show left sidebar")}
               >
                 <span aria-hidden="true" className="toggle-icon">
                   {leftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
@@ -2890,6 +2900,7 @@ function TreeWorkspace({
                 aria-label={rightSidebarOpen ? "Hide right sidebar" : "Show right sidebar"}
                 aria-expanded={rightSidebarOpen}
                 onClick={toggleRightSidebar}
+                {...getHintTriggerProps(rightSidebarOpen ? "Hide right sidebar" : "Show right sidebar")}
               >
                 <span aria-hidden="true" className="toggle-icon">
                   {rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
@@ -3043,6 +3054,7 @@ function TreeWorkspace({
                 type="button"
                 onClick={() => setZoom((value) => snapZoomValue(value * 1.2))}
                 aria-label="Zoom in"
+                {...getHintTriggerProps("Zoom in")}
               >
                 <ZoomIn size={14} className="btn-icon" />
               </button>
@@ -3051,10 +3063,11 @@ function TreeWorkspace({
                 type="button"
                 onClick={() => setZoom((value) => snapZoomValue(value / 1.2))}
                 aria-label="Zoom out"
+                {...getHintTriggerProps("Zoom out")}
               >
                 <ZoomOut size={14} className="btn-icon" />
               </button>
-              <button type="button" onClick={fitCanvas} aria-label="Fit tree to canvas">
+              <button type="button" onClick={fitCanvas} aria-label="Fit tree to canvas" {...getHintTriggerProps("Fit tree to canvas")}>
                 <Maximize size={14} className="btn-icon" />
               </button>
             </div>
