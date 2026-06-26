@@ -151,9 +151,10 @@ const pushTraceFrame = (
 ) => {
   const prev = frames[frames.length - 1];
   const focusKey = focus.join(",");
-  if (prev && prev.label === label && prev._focusKey === focusKey) return;
+  if (prev && prev.label === label && frames._lastFocusKey === focusKey) return;
   _rbTraceCounter += 1;
-  frames.push({ label, root, focus, explanation, kind, _focusKey: focusKey, _id: _rbTraceCounter });
+  frames._lastFocusKey = focusKey;
+  frames.push({ label, root, focus, explanation, kind });
 };
 
 const rotateLeftTrace = (node, trail, trailLen, frames, context) => {
@@ -382,7 +383,7 @@ export const rbInsertTrace = (root, value) => {
 
   return {
     root: nextRoot,
-    frames: frames.map(({ _focusKey, _id, ...frame }) => frame),
+    frames,
   };
 };
 
@@ -480,6 +481,6 @@ export const rbDeleteTrace = (root, value) => {
 
   return {
     root: nextRoot,
-    frames: frames.map(({ _focusKey, _id, ...frame }) => frame),
+    frames,
   };
 };
