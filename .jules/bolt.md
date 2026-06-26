@@ -1,0 +1,3 @@
+## 2024-06-26 - SVG Graph React Memoization
+**Learning:** During drag-to-pan or wheel-to-zoom operations, `pan` and `zoom` state updates trigger continuous re-renders of the entire TreeWorkspace. Since the SVG nodes and edges are mapped directly in the render cycle, React is forced to diff dozens of SVG DOM elements 60 times a second during a gesture, even though only the parent `<g>` transform changes.
+**Action:** Always wrap expensive inner DOM lists (like SVG graph elements) in `useMemo` with strict dependencies, so that panning/zooming updates only apply to the transform wrapper without triggering an O(N) DOM diffing cycle.
