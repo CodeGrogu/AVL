@@ -295,7 +295,7 @@ export const avlInsertTrace = (root, value) => {
   // Strip internal dedup metadata before returning
   return {
     root: nextRoot,
-    frames: frames.map(({ _focusKey, _id, ...frame }) => frame),
+    frames,
   };
 };
 
@@ -375,6 +375,6 @@ export const avlDeleteTrace = (root, value) => {
 
   return {
     root: nextRoot,
-    frames: frames.map(({ _focusKey, _id, ...frame }) => frame),
+    frames,
   };
 };
