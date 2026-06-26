@@ -7,7 +7,8 @@ const withHeight = (node) => ({
   h: 1 + Math.max(height(node.left), height(node.right)),
 });
 
-const balanceFactor = (node) => (node ? height(node.left) - height(node.right) : 0);
+const balanceFactor = (node) =>
+  node ? height(node.left) - height(node.right) : 0;
 
 const rotateRight = (y) => {
   const x = y.left;
@@ -30,12 +31,14 @@ const rebalance = (node) => {
   const bf = balanceFactor(next);
 
   if (bf > 1) {
-    if (balanceFactor(next.left) < 0) next = { ...next, left: rotateLeft(next.left) };
+    if (balanceFactor(next.left) < 0)
+      next = { ...next, left: rotateLeft(next.left) };
     return rotateRight(next);
   }
 
   if (bf < -1) {
-    if (balanceFactor(next.right) > 0) next = { ...next, right: rotateRight(next.right) };
+    if (balanceFactor(next.right) > 0)
+      next = { ...next, right: rotateRight(next.right) };
     return rotateLeft(next);
   }
 
@@ -44,16 +47,20 @@ const rebalance = (node) => {
 
 export const avlInsert = (root, value) => {
   if (!root) return createNode(value, { h: 1 });
-  if (value < root.val) return rebalance({ ...root, left: avlInsert(root.left, value) });
-  if (value > root.val) return rebalance({ ...root, right: avlInsert(root.right, value) });
+  if (value < root.val)
+    return rebalance({ ...root, left: avlInsert(root.left, value) });
+  if (value > root.val)
+    return rebalance({ ...root, right: avlInsert(root.right, value) });
   return root;
 };
 
 export const avlDelete = (root, value) => {
   if (!root) return null;
 
-  if (value < root.val) return rebalance({ ...root, left: avlDelete(root.left, value) });
-  if (value > root.val) return rebalance({ ...root, right: avlDelete(root.right, value) });
+  if (value < root.val)
+    return rebalance({ ...root, left: avlDelete(root.left, value) });
+  if (value > root.val)
+    return rebalance({ ...root, right: avlDelete(root.right, value) });
 
   if (!root.left) return root.right;
   if (!root.right) return root.left;
@@ -75,7 +82,10 @@ const rebuildFromTrail = (subtree, trail, trailLen) => {
   let next = subtree;
   for (let i = trailLen - 1; i >= 0; i -= 1) {
     const entry = trail[i];
-    next = entry.dir === "left" ? { ...entry.node, left: next } : { ...entry.node, right: next };
+    next =
+      entry.dir === "left"
+        ? { ...entry.node, left: next }
+        : { ...entry.node, right: next };
   }
   return next;
 };
@@ -86,18 +96,21 @@ const rebuildFromTrail = (subtree, trail, trailLen) => {
 let _traceCounter = 0;
 const pushTraceFrame = (
   frames,
-  {
-    label,
-    root,
-    focus = [],
-    explanation = "",
-    kind = "step",
-  },
+  { label, root, focus = [], explanation = "", kind = "step" },
 ) => {
   const prev = frames[frames.length - 1];
-  if (prev && prev.label === label && prev._focusKey === focus.join(",")) return;
+  if (prev && prev.label === label && prev._focusKey === focus.join(","))
+    return;
   _traceCounter += 1;
-  frames.push({ label, root, focus, explanation, kind, _focusKey: focus.join(","), _id: _traceCounter });
+  frames.push({
+    label,
+    root,
+    focus,
+    explanation,
+    kind,
+    _focusKey: focus.join(","),
+    _id: _traceCounter,
+  });
 };
 
 const rebalanceWithTrace = (node, trail, trailLen, frames) => {
@@ -109,9 +122,12 @@ const rebalanceWithTrace = (node, trail, trailLen, frames) => {
     const leftBf = balanceFactor(leftChild);
 
     pushTraceFrame(frames, {
-      label: leftBf < 0 ? `AVL case LR at ${next.val}` : `AVL case LL at ${next.val}`,
+      label:
+        leftBf < 0
+          ? `AVL case LR at ${next.val}`
+          : `AVL case LL at ${next.val}`,
       root: rebuildFromTrail(next, trail, trailLen),
-      focus: [next.val, leftChild?.val].filter(Boolean),
+      focus: leftChild != null ? [next.val, leftChild.val] : [next.val],
       explanation:
         leftBf < 0
           ? `Node ${next.val} is left-heavy, but its left child ${leftChild?.val} is right-heavy. Perform double rotation (left then right).`
@@ -123,7 +139,10 @@ const rebalanceWithTrace = (node, trail, trailLen, frames) => {
       pushTraceFrame(frames, {
         label: `Rotate left at ${leftChild.val} (prep)`,
         root: rebuildFromTrail(next, trail, trailLen),
-        focus: [leftChild.val, leftChild.right?.val].filter(Boolean),
+        focus:
+          leftChild.right != null
+            ? [leftChild.val, leftChild.right.val]
+            : [leftChild.val],
         explanation: `First step of LR case: rotate left at child ${leftChild.val} so the heavier branch moves up.`,
         kind: "rotation",
       });
@@ -131,8 +150,9 @@ const rebalanceWithTrace = (node, trail, trailLen, frames) => {
       pushTraceFrame(frames, {
         label: `After prep rotation at ${leftChild.val}`,
         root: rebuildFromTrail(next, trail, trailLen),
-        focus: [next.val, next.left?.val].filter(Boolean),
-        explanation: "Preparation complete. Now root and its new left child are ready for the final rotation.",
+        focus: next.left != null ? [next.val, next.left.val] : [next.val],
+        explanation:
+          "Preparation complete. Now root and its new left child are ready for the final rotation.",
         kind: "rotation-result",
       });
     }
@@ -141,7 +161,7 @@ const rebalanceWithTrace = (node, trail, trailLen, frames) => {
     pushTraceFrame(frames, {
       label: `Rotate right at ${next.val}`,
       root: rebuildFromTrail(next, trail, trailLen),
-      focus: [next.val, pivot].filter(Boolean),
+      focus: pivot != null ? [next.val, pivot] : [next.val],
       explanation: `Main balancing step: rotate right around ${next.val} with pivot ${pivot}.`,
       kind: "rotation",
     });
@@ -150,7 +170,10 @@ const rebalanceWithTrace = (node, trail, trailLen, frames) => {
     pushTraceFrame(frames, {
       label: `After right rotation at ${next.val}`,
       root: rebuildFromTrail(rotated, trail, trailLen),
-      focus: [rotated.val, rotated.right?.val].filter(Boolean),
+      focus:
+        rotated.right != null
+          ? [rotated.val, rotated.right.val]
+          : [rotated.val],
       explanation: `Subtree rooted at ${next.val} is now balanced after right rotation.`,
       kind: "rotation-result",
     });
@@ -163,9 +186,12 @@ const rebalanceWithTrace = (node, trail, trailLen, frames) => {
     const rightBf = balanceFactor(rightChild);
 
     pushTraceFrame(frames, {
-      label: rightBf > 0 ? `AVL case RL at ${next.val}` : `AVL case RR at ${next.val}`,
+      label:
+        rightBf > 0
+          ? `AVL case RL at ${next.val}`
+          : `AVL case RR at ${next.val}`,
       root: rebuildFromTrail(next, trail, trailLen),
-      focus: [next.val, rightChild?.val].filter(Boolean),
+      focus: rightChild != null ? [next.val, rightChild.val] : [next.val],
       explanation:
         rightBf > 0
           ? `Node ${next.val} is right-heavy, but child ${rightChild?.val} is left-heavy. Perform double rotation (right then left).`
@@ -177,7 +203,10 @@ const rebalanceWithTrace = (node, trail, trailLen, frames) => {
       pushTraceFrame(frames, {
         label: `Rotate right at ${rightChild.val} (prep)`,
         root: rebuildFromTrail(next, trail, trailLen),
-        focus: [rightChild.val, rightChild.left?.val].filter(Boolean),
+        focus:
+          rightChild.left != null
+            ? [rightChild.val, rightChild.left.val]
+            : [rightChild.val],
         explanation: `First step of RL case: rotate right at child ${rightChild.val}.`,
         kind: "rotation",
       });
@@ -185,8 +214,9 @@ const rebalanceWithTrace = (node, trail, trailLen, frames) => {
       pushTraceFrame(frames, {
         label: `After prep rotation at ${rightChild.val}`,
         root: rebuildFromTrail(next, trail, trailLen),
-        focus: [next.val, next.right?.val].filter(Boolean),
-        explanation: "Preparation complete for final left rotation at the root of this subtree.",
+        focus: next.right != null ? [next.val, next.right.val] : [next.val],
+        explanation:
+          "Preparation complete for final left rotation at the root of this subtree.",
         kind: "rotation-result",
       });
     }
@@ -195,7 +225,7 @@ const rebalanceWithTrace = (node, trail, trailLen, frames) => {
     pushTraceFrame(frames, {
       label: `Rotate left at ${next.val}`,
       root: rebuildFromTrail(next, trail, trailLen),
-      focus: [next.val, pivot].filter(Boolean),
+      focus: pivot != null ? [next.val, pivot] : [next.val],
       explanation: `Main balancing step: rotate left around ${next.val} with pivot ${pivot}.`,
       kind: "rotation",
     });
@@ -204,7 +234,8 @@ const rebalanceWithTrace = (node, trail, trailLen, frames) => {
     pushTraceFrame(frames, {
       label: `After left rotation at ${next.val}`,
       root: rebuildFromTrail(rotated, trail, trailLen),
-      focus: [rotated.val, rotated.left?.val].filter(Boolean),
+      focus:
+        rotated.left != null ? [rotated.val, rotated.left.val] : [rotated.val],
       explanation: `Subtree rooted at ${next.val} is now balanced after left rotation.`,
       kind: "rotation-result",
     });
