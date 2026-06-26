@@ -2696,7 +2696,7 @@ function TreeWorkspace({
 
   const typeLegend = TYPE_LEGENDS[type] || TYPE_LEGENDS.BST;
 
-  const getNodePalette = (nodeMeta) => {
+  const getNodePalette = useCallback((nodeMeta) => {
     const value = nodeMeta.value;
     const node = nodeMeta.node;
 
@@ -2719,7 +2719,7 @@ function TreeWorkspace({
     }
 
     return { fill: "#7CC4FA", stroke: "#1D4ED8", text: "#082F6B" };
-  };
+  }, [foundValue, pathSet, currentTraversalValue, visitedTraversalValues, type]);
 
   const extraMetric = config.extraMetric(root);
   const parsedExtraMetric = parseMetricText(extraMetric);
@@ -2740,6 +2740,177 @@ function TreeWorkspace({
     : `workspace-layout ${leftSidebarOpen ? "" : "left-sidebar-collapsed"} ${
         rightSidebarOpen ? "" : "right-sidebar-collapsed"
       }`.trim();
+
+
+  // ⚡ Bolt: Memoize inner SVG elements to prevent O(N) DOM diffing during pan/zoom gestures
+  const graphElements = useMemo(() => {
+    return (
+      <>
+        {animatedGraph?.edges.map((edge) => {
+          const dx = edge.to.x - edge.from.x;
+          const dy = edge.to.y - edge.from.y;
+          const distance = Math.hypot(dx, dy);
+          const nx = dx / distance;
+          const ny = dy / distance;
+          const isFocusEdge = focusEdgeKeys.has(edge.key);
+
+          return (
+            <line
+              key={edge.key}
+              x1={edge.from.x + nx * NODE_RADIUS}
+              y1={edge.from.y + ny * NODE_RADIUS}
+              x2={edge.to.x - nx * NODE_RADIUS}
+              y2={edge.to.y - ny * NODE_RADIUS}
+              className={`tree-edge ${isFocusEdge ? `tone-${frameKindMeta.tone}` : ""}`}
+              strokeWidth={isFocusEdge ? 2.7 : 1.5}
+              opacity={edge.opacity}
+            />
+          );
+        })}
+
+        {focusConnector && (
+          <line
+            x1={focusConnector.from.x}
+            y1={focusConnector.from.y}
+            x2={focusConnector.to.x}
+            y2={focusConnector.to.y}
+            className={`focus-link tone-${frameKindMeta.tone}`}
+          />
+        )}
+
+        {animatedGraph?.nodes.map((nodeMeta) => {
+          const palette = getNodePalette(nodeMeta);
+          const bf = type === "AVL" ? (nodeMeta.node.left?.h ?? 0) - (nodeMeta.node.right?.h ?? 0) : null;
+          const focusIdx = frameFocusIndex.get(nodeMeta.value);
+          const isFocused = frameFocusSet.has(nodeMeta.value);
+          const isPrimary = focusIdx === 0;
+          const kind = timelineFrame?.kind;
+
+          // Determine ring color per frame kind for more accurate highlighting
+          const ringColor = isFocused ? (
+            kind === "rotation" || kind === "rotation-result" ? "#2563eb" :
+            kind === "case" ? "#7c3aed" :
+            kind === "color-flip" || kind === "color-flip-result" ? "#dc2626" :
+            kind === "root-recolor" ? "#dc2626" :
+            kind === "insert" ? "#16a34a" :
+            kind === "delete" || kind === "replace" ? "#d97706" :
+            kind === "visit" ? "#64748b" :
+            kind === "done" ? "#16a34a" :
+            "#64748b"
+          ) : null;
+
+          return (
+            <g key={nodeMeta.value} opacity={nodeMeta.opacity}>
+              {/* Outer glow halo for PRIMARY focused node */}
+              {isFocused && isPrimary && (
+                <circle
+                  cx={nodeMeta.x}
+                  cy={nodeMeta.y}
+                  r={NODE_RADIUS + 14}
+                  fill="none"
+                  stroke={ringColor}
+                  strokeWidth="1.2"
+                  opacity="0.3"
+                  className="focus-halo"
+                />
+              )}
+
+              {/* Main focus ring */}
+              {isFocused && (
+                <circle
+                  cx={nodeMeta.x}
+                  cy={nodeMeta.y}
+                  r={isPrimary ? NODE_RADIUS + 9 : NODE_RADIUS + 7}
+                  fill="none"
+                  stroke={ringColor}
+                  className={`focus-ring tone-${frameKindMeta.tone}`}
+                />
+              )}
+
+              {currentTraversalValue === nodeMeta.value && (
+                <circle
+                  cx={nodeMeta.x}
+                  cy={nodeMeta.y}
+                  r={NODE_RADIUS + 5}
+                  fill="none"
+                  stroke="#6366F1"
+                  strokeWidth="2.4"
+                  opacity="0.8"
+                />
+              )}
+
+              <circle
+                cx={nodeMeta.x}
+                cy={nodeMeta.y}
+                r={NODE_RADIUS}
+                fill={palette.fill}
+                stroke={palette.stroke}
+                strokeWidth="1.6"
+                className="tree-node"
+              />
+
+              <text
+                x={nodeMeta.x}
+                y={bf === null ? nodeMeta.y : nodeMeta.y - 5}
+                textAnchor="middle"
+                dominantBaseline="central"
+                className="node-label"
+                fill={palette.text}
+              >
+                {nodeMeta.value}
+              </text>
+
+              {bf !== null && (
+                <text
+                  x={nodeMeta.x}
+                  y={nodeMeta.y + 10}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  className="node-sub-label"
+                  fill={palette.stroke}
+                >
+                  {bf > 0 ? "+" : ""}
+                  {bf}
+                </text>
+              )}
+
+              {/* Invisible larger hit-area for hover */}
+              <circle
+                cx={nodeMeta.x}
+                cy={nodeMeta.y}
+                r={NODE_RADIUS + 6}
+                fill="transparent"
+                stroke="none"
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => {
+                  if (isDragging) return;
+                  setHoveredNode({
+                    value: nodeMeta.value,
+                    node: nodeMeta.node,
+                    x: nodeMeta.x,
+                    y: nodeMeta.y,
+                  });
+                }}
+                onMouseLeave={() => setHoveredNode(null)}
+              />
+            </g>
+          );
+        })}
+      </>
+    );
+  }, [
+    animatedGraph,
+    focusEdgeKeys,
+    frameKindMeta.tone,
+    focusConnector,
+    type,
+    frameFocusIndex,
+    frameFocusSet,
+    timelineFrame?.kind,
+    currentTraversalValue,
+    isDragging,
+    getNodePalette
+  ]);
 
   return (
     <section className="workspace">
@@ -3105,156 +3276,7 @@ function TreeWorkspace({
                 className={`canvas-zoom-layer ${isDragging || isResizing || isWheelPanning ? "dragging" : ""}`}
                 transform={`translate(${renderedPan.x},${renderedPan.y}) scale(${renderedZoom})`}
               >
-                {animatedGraph?.edges.map((edge) => {
-                  const dx = edge.to.x - edge.from.x;
-                  const dy = edge.to.y - edge.from.y;
-                  const distance = Math.hypot(dx, dy);
-                  const nx = dx / distance;
-                  const ny = dy / distance;
-                  const isFocusEdge = focusEdgeKeys.has(edge.key);
-
-                  return (
-                    <line
-                      key={edge.key}
-                      x1={edge.from.x + nx * NODE_RADIUS}
-                      y1={edge.from.y + ny * NODE_RADIUS}
-                      x2={edge.to.x - nx * NODE_RADIUS}
-                      y2={edge.to.y - ny * NODE_RADIUS}
-                      className={`tree-edge ${isFocusEdge ? `tone-${frameKindMeta.tone}` : ""}`}
-                      strokeWidth={isFocusEdge ? 2.7 : 1.5}
-                      opacity={edge.opacity}
-                    />
-                  );
-                })}
-
-                {focusConnector && (
-                  <line
-                    x1={focusConnector.from.x}
-                    y1={focusConnector.from.y}
-                    x2={focusConnector.to.x}
-                    y2={focusConnector.to.y}
-                    className={`focus-link tone-${frameKindMeta.tone}`}
-                  />
-                )}
-
-                {animatedGraph?.nodes.map((nodeMeta) => {
-                  const palette = getNodePalette(nodeMeta);
-                  const bf = type === "AVL" ? (nodeMeta.node.left?.h ?? 0) - (nodeMeta.node.right?.h ?? 0) : null;
-                  const focusIdx = frameFocusIndex.get(nodeMeta.value);
-                  const isFocused = frameFocusSet.has(nodeMeta.value);
-                  const isPrimary = focusIdx === 0;
-                  const kind = timelineFrame?.kind;
-
-                  // Determine ring color per frame kind for more accurate highlighting
-                  const ringColor = isFocused ? (
-                    kind === "rotation" || kind === "rotation-result" ? "#2563eb" :
-                    kind === "case" ? "#7c3aed" :
-                    kind === "color-flip" || kind === "color-flip-result" ? "#dc2626" :
-                    kind === "root-recolor" ? "#dc2626" :
-                    kind === "insert" ? "#16a34a" :
-                    kind === "delete" || kind === "replace" ? "#d97706" :
-                    kind === "visit" ? "#64748b" :
-                    kind === "done" ? "#16a34a" :
-                    "#64748b"
-                  ) : null;
-
-                  return (
-                    <g key={nodeMeta.value} opacity={nodeMeta.opacity}>
-                      {/* Outer glow halo for PRIMARY focused node */}
-                      {isFocused && isPrimary && (
-                        <circle
-                          cx={nodeMeta.x}
-                          cy={nodeMeta.y}
-                          r={NODE_RADIUS + 14}
-                          fill="none"
-                          stroke={ringColor}
-                          strokeWidth="1.2"
-                          opacity="0.3"
-                          className="focus-halo"
-                        />
-                      )}
-
-                      {/* Main focus ring */}
-                      {isFocused && (
-                        <circle
-                          cx={nodeMeta.x}
-                          cy={nodeMeta.y}
-                          r={isPrimary ? NODE_RADIUS + 9 : NODE_RADIUS + 7}
-                          fill="none"
-                          stroke={ringColor}
-                          className={`focus-ring tone-${frameKindMeta.tone}`}
-                        />
-                      )}
-
-                      {currentTraversalValue === nodeMeta.value && (
-                        <circle
-                          cx={nodeMeta.x}
-                          cy={nodeMeta.y}
-                          r={NODE_RADIUS + 5}
-                          fill="none"
-                          stroke="#6366F1"
-                          strokeWidth="2.4"
-                          opacity="0.8"
-                        />
-                      )}
-
-                      <circle
-                        cx={nodeMeta.x}
-                        cy={nodeMeta.y}
-                        r={NODE_RADIUS}
-                        fill={palette.fill}
-                        stroke={palette.stroke}
-                        strokeWidth="1.6"
-                        className="tree-node"
-                      />
-
-                      <text
-                        x={nodeMeta.x}
-                        y={bf === null ? nodeMeta.y : nodeMeta.y - 5}
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        className="node-label"
-                        fill={palette.text}
-                      >
-                        {nodeMeta.value}
-                      </text>
-
-                      {bf !== null && (
-                        <text
-                          x={nodeMeta.x}
-                          y={nodeMeta.y + 10}
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          className="node-sub-label"
-                          fill={palette.stroke}
-                        >
-                          {bf > 0 ? "+" : ""}
-                          {bf}
-                        </text>
-                      )}
-
-                      {/* Invisible larger hit-area for hover */}
-                      <circle
-                        cx={nodeMeta.x}
-                        cy={nodeMeta.y}
-                        r={NODE_RADIUS + 6}
-                        fill="transparent"
-                        stroke="none"
-                        style={{ cursor: "pointer" }}
-                        onMouseEnter={() => {
-                          if (isDragging) return;
-                          setHoveredNode({
-                            value: nodeMeta.value,
-                            node: nodeMeta.node,
-                            x: nodeMeta.x,
-                            y: nodeMeta.y,
-                          });
-                        }}
-                        onMouseLeave={() => setHoveredNode(null)}
-                      />
-                    </g>
-                  );
-                })}
+                {graphElements}
               </g>
             </svg>
 
