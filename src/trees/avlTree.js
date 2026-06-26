@@ -95,9 +95,11 @@ const pushTraceFrame = (
   },
 ) => {
   const prev = frames[frames.length - 1];
-  if (prev && prev.label === label && prev._focusKey === focus.join(",")) return;
+  const focusKey = focus.join(",");
+  if (prev && prev.label === label && frames._lastFocusKey === focusKey) return;
   _traceCounter += 1;
-  frames.push({ label, root, focus, explanation, kind, _focusKey: focus.join(","), _id: _traceCounter });
+  frames._lastFocusKey = focusKey;
+  frames.push({ label, root, focus, explanation, kind });
 };
 
 const rebalanceWithTrace = (node, trail, trailLen, frames) => {
@@ -264,7 +266,7 @@ export const avlInsertTrace = (root, value) => {
   // Strip internal dedup metadata before returning
   return {
     root: nextRoot,
-    frames: frames.map(({ _focusKey, _id, ...frame }) => frame),
+    frames,
   };
 };
 
@@ -344,6 +346,6 @@ export const avlDeleteTrace = (root, value) => {
 
   return {
     root: nextRoot,
-    frames: frames.map(({ _focusKey, _id, ...frame }) => frame),
+    frames,
   };
 };
