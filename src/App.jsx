@@ -3786,7 +3786,7 @@ export default function App() {
                 className="settings-credit-link"
                 href="https://github.com/CodeGrogu"
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
               >
                 CodeGrogu
               </a>
