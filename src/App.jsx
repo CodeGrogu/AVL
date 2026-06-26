@@ -3388,7 +3388,10 @@ function TreeWorkspace({
 }
 
 export default function App() {
-  const persistedRef = useRef(readPersistedState());
+  const persistedRef = useRef(null);
+  if (persistedRef.current === null) {
+    persistedRef.current = readPersistedState();
+  }
 
   const [headerStatusByType, setHeaderStatusByType] = useState(() =>
     TREE_TYPE_ORDER.reduce((acc, type) => {
