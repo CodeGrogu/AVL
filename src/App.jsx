@@ -1842,7 +1842,7 @@ function TreeWorkspace({
       operationHistory: operationHistory.map(cloneOperation),
       selectedOperationId: safeSelectedOperationId,
       timelineState: {
-        frames: timelineState.frames.map(cloneFrame),
+        frames: timelineState.frames,
         index: safeIndex,
         playing: false,
       },
